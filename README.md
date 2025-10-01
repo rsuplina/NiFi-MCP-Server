@@ -120,9 +120,9 @@ Once configured, you can ask Claude questions like:
 
 **Using the example `"List all processors in the root process group"`, we see the following for the example NiFi Canvas:**
 
-![](/screenshots/nifi-canvas1.png)
+![](/screenshots/nifi-canvas-1.png)
 
-![](/screenshots/nifi-readcanvas1.png)
+![](/screenshots/nifi-readcanvas-1.png)
 
 
 **Using the example, `"What version of NiFi am I running?"`, we see the following:**
