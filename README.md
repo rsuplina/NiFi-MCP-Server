@@ -117,6 +117,17 @@ Once configured, you can ask Claude questions like:
 - "What parameter contexts are configured?"
 - "Tell me about the controller services"
 
+
+Using the example `"List all processors in the root process group"`, we see the following for the example NiFi Canvas:
+![](/screenshots/nifi-canvas1.png)
+
+![](/screenshots/nifi-readcanvas1.png)
+
+
+Using the example, `"What version of NiFi am I running?"`, we see the following:
+![](/screenshots/nifi-version-check.png)
+
+
 ## License
 
 Apache License 2.0
