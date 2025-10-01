@@ -2,89 +2,72 @@
 
 Model Context Protocol server providing read-only access to Apache NiFi via Apache Knox.
 
-**Works with both NiFi 1.x and 2.x** - version detection is automatic.
+**Works with both NiFi 1.x and 2.x** - automatic version detection and adaptation.
 
 ## Features
 
-- **Version detection**: Automatically detects NiFi 1.x vs 2.x and adapts behavior
-- **Read-only tools**:
-  - `get_nifi_version()` - detect version and build info
-  - `get_root_process_group()` - get root process group
-  - `list_processors(process_group_id)` - list processors in a PG
-  - `list_connections(process_group_id)` - list connections in a PG
-  - `get_bulletins(after_ms?)` - get recent bulletins
-  - `list_parameter_contexts()` - list parameter contexts
-  - `get_controller_services(process_group_id?)` - get controller services
-- **Knox auth**: Bearer token, Cookie, Passcode token, or Basic → token exchange
-- **Transport**: stdio (HTTP/SSE can be added later)
+- **Automatic version detection** - Detects NiFi 1.x vs 2.x and adapts behavior
+- **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
+- **Read-only by default** - Safe exploration of NiFi flows and configuration
+- **7 MCP tools** for interacting with NiFi:
+  - `get_nifi_version()` - Version and build information
+  - `get_root_process_group()` - Root process group details
+  - `list_processors(process_group_id)` - List processors in a process group
+  - `list_connections(process_group_id)` - List connections in a process group
+  - `get_bulletins(after_ms?)` - Recent bulletins and alerts
+  - `list_parameter_contexts()` - Parameter contexts
+  - `get_controller_services(process_group_id?)` - Controller services
 
-## Configuration (env)
+## Quick Start
 
-- Connection:
-  - `KNOX_GATEWAY_URL` (e.g., `https://knox.example.com/gateway/default`)
-  - `NIFI_API_BASE` (optional override)
-- Auth (choose one):
-  - `KNOX_TOKEN` or `KNOX_COOKIE` or `KNOX_PASSCODE_TOKEN`
-  - or `KNOX_USER` + `KNOX_PASSWORD` (+ optional `KNOX_TOKEN_ENDPOINT`)
-- TLS/HTTP:
-  - `KNOX_VERIFY_SSL=true|false` or `KNOX_CA_BUNDLE=/path/to/ca.pem`
-  - `HTTP_TIMEOUT_SECONDS`, `HTTP_MAX_RETRIES`
-- Behavior:
-  - `NIFI_READONLY=true` (default)
+### For CDP NiFi deployments
 
-## Run (stdio)
-
-With uv:
-
-```bash
-cd /Users/ktalbert/Documents/GitHub/NiFi-MCP-Server
-uvx --from . run-server
+Your NiFi API base URL will typically be:
+```
+https://<your-nifi-host>/nifi-2-dh/cdp-proxy/nifi-app/nifi-api
 ```
 
-Environment example:
+Get your Knox JWT token from the CDP UI and use it with the configurations below.
 
-```bash
-export MCP_TRANSPORT=stdio
-export KNOX_GATEWAY_URL="https://knox.example.com/gateway/default"
-export KNOX_TOKEN="<your_knox_bearer_token>"
-```
+## Setup
 
-## Claude Desktop config
+### Option 1: Claude Desktop (Local)
 
-### Option 1: Local installation (For Claude Desktop, etc.)
+1. **Clone and install:**
+   ```bash
+   git clone https://github.com/kevinbtalbert/nifi-mcp-server.git
+   cd nifi-mcp-server
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
 
-First, clone and install locally:
-```bash
-git clone https://github.com/kevinbtalbert/nifi-mcp-server.git
-cd nifi-mcp-server
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "nifi-mcp-server": {
-      "command": "/Users/ktalbert/Documents/GitHub/NiFi-MCP-Server/.venv/bin/python",
-      "args": [
-        "-m",
-        "nifi_mcp_server.server"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio",
-        "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
-        "KNOX_TOKEN": "<your_knox_bearer_token>",
-        "NIFI_READONLY": "true"
+2. **Configure Claude Desktop** - Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+   ```json
+    {
+      "mcpServers": {
+        "nifi-mcp-server": {
+          "command": "/FULL/PATH/TO/NiFi-MCP-Server/.venv/bin/python",
+          "args": [
+            "-m",
+            "nifi_mcp_server.server"
+          ],
+          "env": {
+            "MCP_TRANSPORT": "stdio",
+            "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
+            "KNOX_TOKEN": "<your_knox_bearer_token>",
+            "NIFI_READONLY": "true"
+          }
+        }
       }
     }
-  }
-}
-```
+   ```
 
-### Option 2: Using uvx (For use by Cloudera Agent Studio)
+3. **Restart Claude Desktop** and start asking questions about your NiFi flows!
+
+### Option 2: Cloudera Agent Studio
+
+For use with Cloudera Agent Studio, use the `uvx` command:
 
 ```json
 {
@@ -107,8 +90,33 @@ Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-## Next steps
+## Configuration Options
 
-- Add connections/controller services/provenance tools
-- Optional start/stop actions behind allowlist
-- HTTP/SSE transports
+All configuration is done via environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NIFI_API_BASE` | Yes* | Full NiFi API URL (e.g., `https://host/nifi-2-dh/cdp-proxy/nifi-app/nifi-api`) |
+| `KNOX_TOKEN` | Yes* | Knox JWT token for authentication |
+| `KNOX_GATEWAY_URL` | No | Knox gateway URL (alternative to `NIFI_API_BASE`) |
+| `KNOX_COOKIE` | No | Alternative: provide full cookie string instead of token |
+| `KNOX_PASSCODE_TOKEN` | No | Alternative: Knox passcode token (auto-exchanged for JWT) |
+| `NIFI_READONLY` | No | Read-only mode (default: `true`) |
+| `KNOX_VERIFY_SSL` | No | Verify SSL certificates (default: `true`) |
+| `KNOX_CA_BUNDLE` | No | Path to CA certificate bundle |
+
+\* Either `NIFI_API_BASE` or `KNOX_GATEWAY_URL` is required
+
+## Example Usage
+
+Once configured, you can ask Claude questions like:
+
+- "What version of NiFi am I running?"
+- "List all processors in the root process group"
+- "Show me recent bulletins"
+- "What parameter contexts are configured?"
+- "Tell me about the controller services"
+
+## License
+
+Apache License 2.0
