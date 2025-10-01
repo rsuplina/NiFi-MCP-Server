@@ -115,6 +115,145 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 		data = nifi.get_controller_services(process_group_id)
 		return _redact_sensitive(data)
 
+	# ===== Additional Read-Only Tools =====
+
+	@app.tool()
+	async def get_processor_types() -> Dict[str, Any]:
+		"""Get all available processor types (read-only). Useful for discovering what processors can be created."""
+		data = nifi.get_processor_types()
+		return _redact_sensitive(data)
+
+	@app.tool()
+	async def search_flow(query: str) -> Dict[str, Any]:
+		"""Search the NiFi flow for components (read-only). Returns processors, connections, and other components matching the search query."""
+		data = nifi.search_flow(query)
+		return _redact_sensitive(data)
+
+	@app.tool()
+	async def get_connection_details(connection_id: str) -> Dict[str, Any]:
+		"""Get details about a specific connection including queue size and relationships (read-only)."""
+		data = nifi.get_connection(connection_id)
+		return _redact_sensitive(data)
+
+	@app.tool()
+	async def get_processor_details(processor_id: str) -> Dict[str, Any]:
+		"""Get detailed information about a specific processor including configuration (read-only)."""
+		data = nifi.get_processor(processor_id)
+		return _redact_sensitive(data)
+
+	@app.tool()
+	async def list_input_ports(process_group_id: str) -> Dict[str, Any]:
+		"""List input ports for a process group (read-only)."""
+		data = nifi.get_input_ports(process_group_id)
+		return _redact_sensitive(data)
+
+	@app.tool()
+	async def list_output_ports(process_group_id: str) -> Dict[str, Any]:
+		"""List output ports for a process group (read-only)."""
+		data = nifi.get_output_ports(process_group_id)
+		return _redact_sensitive(data)
+
+	# ===== Write Tools (only enabled when NIFI_READONLY=false) =====
+
+	if not readonly:
+		@app.tool()
+		async def start_processor(processor_id: str, version: int) -> Dict[str, Any]:
+			"""Start a processor. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.start_processor(processor_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def stop_processor(processor_id: str, version: int) -> Dict[str, Any]:
+			"""Stop a processor. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.stop_processor(processor_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def create_processor(
+			process_group_id: str,
+			processor_type: str,
+			name: str,
+			position_x: float = 0.0,
+			position_y: float = 0.0
+		) -> Dict[str, Any]:
+			"""Create a new processor in a process group. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Args:
+				process_group_id: The ID of the process group to create the processor in
+				processor_type: The fully qualified processor type (e.g., 'org.apache.nifi.processors.standard.LogAttribute')
+				name: The name for the new processor
+				position_x: X coordinate on the canvas (default: 0.0)
+				position_y: Y coordinate on the canvas (default: 0.0)
+			"""
+			data = nifi.create_processor(process_group_id, processor_type, name, position_x, position_y)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def update_processor_config(
+			processor_id: str,
+			version: int,
+			config: Dict[str, Any]
+		) -> Dict[str, Any]:
+			"""Update processor configuration. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Args:
+				processor_id: The processor ID
+				version: The current revision version
+				config: Configuration object with properties, scheduling strategy, etc.
+			"""
+			data = nifi.update_processor(processor_id, version, config)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def delete_processor(processor_id: str, version: int) -> Dict[str, Any]:
+			"""Delete a processor. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.delete_processor(processor_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def create_connection(
+			process_group_id: str,
+			source_id: str,
+			source_type: str,
+			destination_id: str,
+			destination_type: str,
+			relationships: str
+		) -> Dict[str, Any]:
+			"""Create a connection between two components. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Args:
+				process_group_id: The process group ID
+				source_id: Source component ID
+				source_type: Source type (PROCESSOR, INPUT_PORT, OUTPUT_PORT, FUNNEL)
+				destination_id: Destination component ID
+				destination_type: Destination type (PROCESSOR, INPUT_PORT, OUTPUT_PORT, FUNNEL)
+				relationships: Comma-separated list of relationships (e.g., 'success,failure')
+			"""
+			rel_list = [r.strip() for r in relationships.split(',')]
+			data = nifi.create_connection(
+				process_group_id, source_id, source_type,
+				destination_id, destination_type, rel_list
+			)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def delete_connection(connection_id: str, version: int) -> Dict[str, Any]:
+			"""Delete a connection. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.delete_connection(connection_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def enable_controller_service(service_id: str, version: int) -> Dict[str, Any]:
+			"""Enable a controller service. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.enable_controller_service(service_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def disable_controller_service(service_id: str, version: int) -> Dict[str, Any]:
+			"""Disable a controller service. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.disable_controller_service(service_id, version)
+			return _redact_sensitive(data)
+
 	return app
 
 

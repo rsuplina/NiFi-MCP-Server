@@ -9,7 +9,7 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
 - **Automatic version detection** - Detects NiFi 1.x vs 2.x and adapts behavior
 - **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
 - **Read-only by default** - Safe exploration of NiFi flows and configuration
-- **7 MCP tools** for interacting with NiFi:
+- **13 read-only MCP tools** for exploring NiFi:
   - `get_nifi_version()` - Version and build information
   - `get_root_process_group()` - Root process group details
   - `list_processors(process_group_id)` - List processors in a process group
@@ -17,6 +17,22 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `get_bulletins(after_ms?)` - Recent bulletins and alerts
   - `list_parameter_contexts()` - Parameter contexts
   - `get_controller_services(process_group_id?)` - Controller services
+  - `get_processor_types()` - Available processor types for flow building
+  - `search_flow(query)` - Search for components in the flow
+  - `get_connection_details(connection_id)` - Detailed connection information
+  - `get_processor_details(processor_id)` - Detailed processor configuration
+  - `list_input_ports(process_group_id)` - Input ports for a process group
+  - `list_output_ports(process_group_id)` - Output ports for a process group
+- **10 write operations** (when `NIFI_READONLY=false`):
+  - `start_processor(processor_id, version)` - Start a processor
+  - `stop_processor(processor_id, version)` - Stop a processor
+  - `create_processor(...)` - Create a new processor
+  - `update_processor_config(...)` - Update processor configuration
+  - `delete_processor(processor_id, version)` - Delete a processor
+  - `create_connection(...)` - Connect components
+  - `delete_connection(connection_id, version)` - Delete a connection
+  - `enable_controller_service(service_id, version)` - Enable a controller service
+  - `disable_controller_service(service_id, version)` - Disable a controller service
 
 ## Quick Start
 
@@ -118,6 +134,8 @@ Get Knox Token from the Flow Management Datahub Knox instance:
 
 ## Example Usage
 
+### Read-Only Operations (Default)
+
 Once configured, you can ask Claude questions like:
 
 - "What version of NiFi am I running?"
@@ -125,6 +143,29 @@ Once configured, you can ask Claude questions like:
 - "Show me recent bulletins"
 - "What parameter contexts are configured?"
 - "Tell me about the controller services"
+- "What processor types are available for building flows?"
+- "Search for processors containing 'kafka'"
+- "Show me the details of connection abc-123"
+
+### Write Operations (when NIFI_READONLY=false)
+
+**⚠️ WARNING: Write operations modify your NiFi flows. Use with caution!**
+
+To enable write operations, set `NIFI_READONLY=false` in your configuration. Then you can:
+
+- **Build flows**: "Create a LogAttribute processor named 'MyLogger' in the root process group"
+- **Manage processors**: "Start processor with ID abc-123", "Stop all processors in group xyz"
+- **Connect components**: "Create a connection from processor A to processor B for the 'success' relationship"
+- **Configure**: "Update the scheduling period of processor abc-123 to 30 seconds"
+- **Control services**: "Enable the DBCPConnectionPool controller service"
+
+**Examples:**
+```
+"Create a GenerateFlowFile processor in process group abc-123"
+"Connect processor source-123 to processor dest-456 for success relationship"
+"Start processor xyz-789"
+"Stop all processors and then start them one by one"
+```
 
 
 **Using the example `"List all processors in the root process group"`, we see the following for the example NiFi Canvas:**

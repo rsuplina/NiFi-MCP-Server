@@ -41,6 +41,51 @@ class NiFiClient:
 		resp.raise_for_status()
 		return resp.json()
 
+	@retry(
+		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+		stop=stop_after_attempt(3),
+		reraise=True,
+	)
+	def _put(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+		resp = self.session.put(self._url(path), json=data, timeout=self.timeout)
+		if resp.status_code == 401:
+			raise requests.HTTPError("Unauthorized", response=resp)
+		if resp.status_code == 403:
+			raise requests.HTTPError("Forbidden", response=resp)
+		resp.raise_for_status()
+		return resp.json()
+
+	@retry(
+		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+		stop=stop_after_attempt(3),
+		reraise=True,
+	)
+	def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+		resp = self.session.post(self._url(path), json=data, timeout=self.timeout)
+		if resp.status_code == 401:
+			raise requests.HTTPError("Unauthorized", response=resp)
+		if resp.status_code == 403:
+			raise requests.HTTPError("Forbidden", response=resp)
+		resp.raise_for_status()
+		return resp.json()
+
+	@retry(
+		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+		stop=stop_after_attempt(3),
+		reraise=True,
+	)
+	def _delete(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+		resp = self.session.delete(self._url(path), params=params, timeout=self.timeout)
+		if resp.status_code == 401:
+			raise requests.HTTPError("Unauthorized", response=resp)
+		if resp.status_code == 403:
+			raise requests.HTTPError("Forbidden", response=resp)
+		resp.raise_for_status()
+		return resp.json() if resp.content else {}
+
 	def get_version_info(self) -> Dict[str, Any]:
 		"""Get NiFi version and build information."""
 		return self._get("flow/about")
@@ -92,5 +137,123 @@ class NiFiClient:
 		if pg_id:
 			return self._get(f"flow/process-groups/{pg_id}/controller-services")
 		return self._get("flow/controller/controller-services")
+
+	# ===== Additional Read-Only Methods =====
+	
+	def get_processor_types(self) -> Dict[str, Any]:
+		"""Get available processor types."""
+		return self._get("flow/processor-types")
+	
+	def search_flow(self, query: str) -> Dict[str, Any]:
+		"""Search the flow for components matching a query."""
+		return self._get("flow/search-results", params={"q": query})
+	
+	def get_connection(self, connection_id: str) -> Dict[str, Any]:
+		"""Get details about a specific connection."""
+		return self._get(f"connections/{connection_id}")
+	
+	def get_input_ports(self, pg_id: str) -> Dict[str, Any]:
+		"""Get input ports for a process group."""
+		return self._get(f"process-groups/{pg_id}/input-ports")
+	
+	def get_output_ports(self, pg_id: str) -> Dict[str, Any]:
+		"""Get output ports for a process group."""
+		return self._get(f"process-groups/{pg_id}/output-ports")
+
+	# ===== Write Methods (require NIFI_READONLY=false) =====
+	
+	def start_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+		"""Start a processor. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"processors/{processor_id}/run-status",
+			{"revision": {"version": version}, "state": "RUNNING", "disconnectedNodeAcknowledged": False}
+		)
+	
+	def stop_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+		"""Stop a processor. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"processors/{processor_id}/run-status",
+			{"revision": {"version": version}, "state": "STOPPED", "disconnectedNodeAcknowledged": False}
+		)
+	
+	def create_processor(
+		self,
+		pg_id: str,
+		processor_type: str,
+		name: str,
+		position_x: float = 0.0,
+		position_y: float = 0.0
+	) -> Dict[str, Any]:
+		"""Create a new processor. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{pg_id}/processors",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"type": processor_type,
+					"name": name,
+					"position": {"x": position_x, "y": position_y}
+				}
+			}
+		)
+	
+	def update_processor(
+		self,
+		processor_id: str,
+		version: int,
+		config: Dict[str, Any]
+	) -> Dict[str, Any]:
+		"""Update processor configuration. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"processors/{processor_id}",
+			{
+				"revision": {"version": version},
+				"component": config
+			}
+		)
+	
+	def delete_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+		"""Delete a processor. Requires NIFI_READONLY=false."""
+		return self._delete(f"processors/{processor_id}", params={"version": version})
+	
+	def create_connection(
+		self,
+		pg_id: str,
+		source_id: str,
+		source_type: str,
+		destination_id: str,
+		destination_type: str,
+		relationships: list[str]
+	) -> Dict[str, Any]:
+		"""Create a connection between components. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{pg_id}/connections",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"source": {"id": source_id, "type": source_type},
+					"destination": {"id": destination_id, "type": destination_type},
+					"selectedRelationships": relationships
+				}
+			}
+		)
+	
+	def delete_connection(self, connection_id: str, version: int) -> Dict[str, Any]:
+		"""Delete a connection. Requires NIFI_READONLY=false."""
+		return self._delete(f"connections/{connection_id}", params={"version": version})
+	
+	def enable_controller_service(self, service_id: str, version: int) -> Dict[str, Any]:
+		"""Enable a controller service. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"controller-services/{service_id}/run-status",
+			{"revision": {"version": version}, "state": "ENABLED"}
+		)
+	
+	def disable_controller_service(self, service_id: str, version: int) -> Dict[str, Any]:
+		"""Disable a controller service. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"controller-services/{service_id}/run-status",
+			{"revision": {"version": version}, "state": "DISABLED"}
+		)
 
 
