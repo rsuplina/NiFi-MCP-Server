@@ -65,7 +65,7 @@ Get your Knox JWT token from the CDP UI and use it with the configurations below
 
 3. **Restart Claude Desktop** and start asking questions about your NiFi flows!
 
-### Option 2: Cloudera Agent Studio
+### Option 2: Direct Installation (Cloudera Agent Studio)
 
 For use with Cloudera Agent Studio, use the `uvx` command:
 
