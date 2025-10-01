@@ -9,6 +9,7 @@ import anyio
 from .config import ServerConfig
 from .auth import KnoxAuthFactory
 from .client import NiFiClient
+from .flow_builder import analyze_flow_request
 
 
 # Lazy import of MCP to give a clear error if the dependency is missing
@@ -152,6 +153,49 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 		"""List output ports for a process group (read-only)."""
 		data = nifi.get_output_ports(process_group_id)
 		return _redact_sensitive(data)
+	
+	@app.tool()
+	async def get_processor_state(processor_id: str) -> str:
+		"""Get just the state of a processor (RUNNING, STOPPED, DISABLED, etc.).
+		
+		Quick status check without fetching full processor details.
+		"""
+		return nifi.get_processor_state(processor_id)
+	
+	@app.tool()
+	async def check_connection_queue(connection_id: str) -> Dict[str, int]:
+		"""Check queue size for a connection (flowfile count and bytes).
+		
+		Useful before deleting connections - they must be empty to delete.
+		Returns: {'flowFilesQueued': int, 'bytesQueued': int}
+		"""
+		return nifi.get_connection_queue_size(connection_id)
+	
+	@app.tool()
+	async def get_flow_summary(process_group_id: str) -> Dict[str, Any]:
+		"""Get summary statistics for a process group.
+		
+		Returns processor counts by state, connection count, and total queued data.
+		Perfect for understanding the overall health and state of a flow.
+		"""
+		return nifi.get_process_group_summary(process_group_id)
+	
+	@app.tool()
+	async def analyze_flow_build_request(user_request: str) -> Dict[str, Any]:
+		"""Analyze a user's request to build a NiFi flow and provide guidance.
+		
+		This tool identifies common flow patterns (SQL to Iceberg, Kafka to S3, etc.)
+		and returns the requirements needed to build the flow.
+		
+		Examples:
+		  - "Build a flow from SQL Server to Iceberg"
+		  - "I need to move data from Kafka to S3"
+		  - "Create a REST API to database pipeline"
+		  
+		Returns requirements the user needs to provide before building the flow.
+		Use this BEFORE attempting to create processors for complex flows.
+		"""
+		return analyze_flow_request(user_request)
 
 	# ===== Write Tools (only enabled when NIFI_READONLY=false) =====
 
@@ -238,8 +282,21 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 
 		@app.tool()
 		async def delete_connection(connection_id: str, version: int) -> Dict[str, Any]:
-			"""Delete a connection. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			"""Delete a connection. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Note: Connections with flowfiles in the queue cannot be deleted.
+			Check queue status with get_connection_details() first, or use empty_connection_queue().
+			"""
 			data = nifi.delete_connection(connection_id, version)
+			return _redact_sensitive(data)
+
+		@app.tool()
+		async def empty_connection_queue(connection_id: str) -> Dict[str, Any]:
+			"""Drop all flowfiles from a connection's queue. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			⚠️ WARNING: This permanently deletes flowfiles. Use before deleting connections with queued data.
+			"""
+			data = nifi.empty_connection_queue(connection_id)
 			return _redact_sensitive(data)
 
 		@app.tool()

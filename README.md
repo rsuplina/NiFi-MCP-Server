@@ -9,7 +9,8 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
 - **Automatic version detection** - Detects NiFi 1.x vs 2.x and adapts behavior
 - **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
 - **Read-only by default** - Safe exploration of NiFi flows and configuration
-- **13 read-only MCP tools** for exploring NiFi:
+- **Intelligent flow building** - Pattern recognition and requirements gathering for complex flows
+- **17 read-only MCP tools** for exploring NiFi:
   - `get_nifi_version()` - Version and build information
   - `get_root_process_group()` - Root process group details
   - `list_processors(process_group_id)` - List processors in a process group
@@ -23,7 +24,11 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `get_processor_details(processor_id)` - Detailed processor configuration
   - `list_input_ports(process_group_id)` - Input ports for a process group
   - `list_output_ports(process_group_id)` - Output ports for a process group
-- **10 write operations** (when `NIFI_READONLY=false`):
+  - `get_processor_state(processor_id)` - Quick processor state check
+  - `check_connection_queue(connection_id)` - Queue size (flowfiles + bytes)
+  - `get_flow_summary(process_group_id)` - Flow statistics and health overview
+  - `analyze_flow_build_request(user_request)` - Intelligent pattern recognition and requirements gathering
+- **11 write operations** (when `NIFI_READONLY=false`):
   - `start_processor(processor_id, version)` - Start a processor
   - `stop_processor(processor_id, version)` - Stop a processor
   - `create_processor(...)` - Create a new processor
@@ -31,6 +36,7 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `delete_processor(processor_id, version)` - Delete a processor
   - `create_connection(...)` - Connect components
   - `delete_connection(connection_id, version)` - Delete a connection
+  - `empty_connection_queue(connection_id)` - Empty flowfiles from queue (⚠️ data loss)
   - `enable_controller_service(service_id, version)` - Enable a controller service
   - `disable_controller_service(service_id, version)` - Disable a controller service
 
@@ -164,8 +170,19 @@ To enable write operations, set `NIFI_READONLY=false` in your configuration. The
 "Create a GenerateFlowFile processor in process group abc-123"
 "Connect processor source-123 to processor dest-456 for success relationship"
 "Start processor xyz-789"
-"Stop all processors and then start them one by one"
+"Check the queue status for connection conn-456"
+"Empty the queue for connection conn-456 before deletion"  (⚠️ deletes flowfiles permanently)
+"Delete connection conn-456"
 ```
+
+**Important Notes:**
+- **Version Tracking:** NiFi uses optimistic locking. Always fetch current versions before updates:
+  ```python
+  processor = get_processor_details(processor_id)
+  current_version = processor['revision']['version']
+  stop_processor(processor_id, current_version)
+  ```
+- **Queue Management:** Connections with flowfiles cannot be deleted. Use `get_connection_details()` to check queue status, then `empty_connection_queue()` if needed before deletion.
 
 
 **Using the example `"List all processors in the root process group"`, we see the following for the example NiFi Canvas:**

@@ -212,9 +212,12 @@ class NiFiClient:
 			}
 		)
 	
-	def delete_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+	def delete_processor(self, processor_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
 		"""Delete a processor. Requires NIFI_READONLY=false."""
-		return self._delete(f"processors/{processor_id}", params={"version": version})
+		return self._delete(
+			f"processors/{processor_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
+		)
 	
 	def create_connection(
 		self,
@@ -231,16 +234,33 @@ class NiFiClient:
 			{
 				"revision": {"version": 0},
 				"component": {
-					"source": {"id": source_id, "type": source_type},
-					"destination": {"id": destination_id, "type": destination_type},
+					"source": {"id": source_id, "groupId": pg_id, "type": source_type},
+					"destination": {"id": destination_id, "groupId": pg_id, "type": destination_type},
 					"selectedRelationships": relationships
 				}
 			}
 		)
 	
-	def delete_connection(self, connection_id: str, version: int) -> Dict[str, Any]:
-		"""Delete a connection. Requires NIFI_READONLY=false."""
-		return self._delete(f"connections/{connection_id}", params={"version": version})
+	def delete_connection(self, connection_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
+		"""Delete a connection. Requires NIFI_READONLY=false.
+		
+		Note: Connections with flowfiles in the queue cannot be deleted.
+		Use empty_connection_queue() first if needed.
+		"""
+		return self._delete(
+			f"connections/{connection_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
+		)
+	
+	def empty_connection_queue(self, connection_id: str) -> Dict[str, Any]:
+		"""Drop all flowfiles from a connection's queue. Requires NIFI_READONLY=false.
+		
+		Warning: This permanently deletes flowfiles. Use with caution.
+		"""
+		return self._post(
+			f"flowfile-queues/{connection_id}/drop-requests",
+			{}
+		)
 	
 	def enable_controller_service(self, service_id: str, version: int) -> Dict[str, Any]:
 		"""Enable a controller service. Requires NIFI_READONLY=false."""
@@ -255,5 +275,68 @@ class NiFiClient:
 			f"controller-services/{service_id}/run-status",
 			{"revision": {"version": version}, "state": "DISABLED"}
 		)
+	
+	# ===== Helper Methods for Common Patterns =====
+	
+	def get_processor_state(self, processor_id: str) -> str:
+		"""Get just the state of a processor (RUNNING, STOPPED, etc.) without full details.
+		
+		Returns the state as a string: RUNNING, STOPPED, DISABLED, etc.
+		"""
+		proc = self.get_processor(processor_id)
+		return proc['component']['state']
+	
+	def get_connection_queue_size(self, connection_id: str) -> Dict[str, int]:
+		"""Get queue size for a connection (flowfile count and byte count).
+		
+		Returns dict with 'flowFilesQueued' and 'bytesQueued'.
+		"""
+		conn = self.get_connection(connection_id)
+		snapshot = conn['status']['aggregateSnapshot']
+		return {
+			'flowFilesQueued': snapshot.get('flowFilesQueued', 0),
+			'bytesQueued': snapshot.get('bytesQueued', 0)
+		}
+	
+	def is_connection_empty(self, connection_id: str) -> bool:
+		"""Check if a connection has an empty queue (safe to delete).
+		
+		Returns True if no flowfiles are queued, False otherwise.
+		"""
+		queue_size = self.get_connection_queue_size(connection_id)
+		return queue_size['flowFilesQueued'] == 0
+	
+	def get_process_group_summary(self, pg_id: str) -> Dict[str, Any]:
+		"""Get summary statistics for a process group.
+		
+		Returns counts of processors (by state), connections, and queued flowfiles.
+		"""
+		pg = self.get_process_group(pg_id)
+		flow = pg['processGroupFlow']['flow']
+		
+		processors = flow.get('processors', [])
+		connections = flow.get('connections', [])
+		
+		# Count processors by state
+		state_counts = {}
+		for proc in processors:
+			state = proc.get('component', {}).get('state', 'UNKNOWN')
+			state_counts[state] = state_counts.get(state, 0) + 1
+		
+		# Sum queued flowfiles
+		total_queued = 0
+		total_bytes = 0
+		for conn in connections:
+			snapshot = conn.get('status', {}).get('aggregateSnapshot', {})
+			total_queued += snapshot.get('flowFilesQueued', 0)
+			total_bytes += snapshot.get('bytesQueued', 0)
+		
+		return {
+			'processorCount': len(processors),
+			'processorStates': state_counts,
+			'connectionCount': len(connections),
+			'totalFlowFilesQueued': total_queued,
+			'totalBytesQueued': total_bytes
+		}
 
 
