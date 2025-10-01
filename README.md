@@ -75,7 +75,7 @@ Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
       ],
       "env": {
         "MCP_TRANSPORT": "stdio",
-        "NIFI_API_BASE": "https://nifi-2-dh-management0.cgsi-dem.prep-j1tk.a3.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
+        "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
         "KNOX_TOKEN": "<your_knox_bearer_token>",
         "NIFI_READONLY": "true"
       }
