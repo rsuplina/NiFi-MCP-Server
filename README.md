@@ -51,7 +51,7 @@ export KNOX_TOKEN="<your_knox_bearer_token>"
 
 ## Claude Desktop config
 
-### Option 1: Local installation (Recommended)
+### Option 1: Local installation (For Claude Desktop, etc.)
 
 First, clone and install locally:
 ```bash
