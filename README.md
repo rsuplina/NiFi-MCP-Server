@@ -107,6 +107,15 @@ All configuration is done via environment variables:
 
 \* Either `NIFI_API_BASE` or `KNOX_GATEWAY_URL` is required
 
+
+For the NIFI_API_BASE, form using the url from Knox (less `-token`), and add the postfix `/nifi-app/nifi-api`
+So, `https://nifi-2-dh-management0.yourdomain.cloudera.site/nifi-2-dh/cdp-proxy-token` becomes `https://nifi-2-dh-management0.yourdomain.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api`
+
+Get Knox Token from the Flow Management Datahub Knox instance:
+
+![](/screenshots/knox-token-generation.png)
+
+
 ## Example Usage
 
 Once configured, you can ask Claude questions like:
