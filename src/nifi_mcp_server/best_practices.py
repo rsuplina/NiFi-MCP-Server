@@ -4,7 +4,7 @@ Best practices helper for NiFi flow building.
 This module enforces NiFi best practices and provides intelligent defaults.
 """
 
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import re
 
 
