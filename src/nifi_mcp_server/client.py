@@ -8,7 +8,19 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 
 class NiFiError(Exception):
-	pass
+	"""Base exception for NiFi API errors with detailed error information."""
+	def __init__(self, message: str, status_code: Optional[int] = None, response_body: Optional[str] = None):
+		self.status_code = status_code
+		self.response_body = response_body
+		super().__init__(message)
+	
+	def __str__(self):
+		msg = super().__str__()
+		if self.status_code:
+			msg = f"[{self.status_code}] {msg}"
+		if self.response_body:
+			msg = f"{msg}\n\nNiFi API Response:\n{self.response_body}"
+		return msg
 
 
 class NiFiClient:
@@ -27,63 +39,75 @@ class NiFiClient:
 		return f"{self.base_url}/{path.lstrip('/')}"
 
 	@retry(
-		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		retry=retry_if_exception_type((NiFiError, requests.HTTPError, requests.ConnectionError, requests.Timeout)),
 		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
 		stop=stop_after_attempt(3),
 		reraise=True,
 	)
 	def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 		resp = self.session.get(self._url(path), params=params, timeout=self.timeout)
-		if resp.status_code == 401:
-			raise requests.HTTPError("Unauthorized", response=resp)
-		if resp.status_code == 403:
-			raise requests.HTTPError("Forbidden", response=resp)
-		resp.raise_for_status()
+		if not resp.ok:
+			# Capture detailed error information from NiFi API
+			error_body = resp.text if resp.text else "(empty response)"
+			raise NiFiError(
+				f"GET {path} failed: {resp.reason}",
+				status_code=resp.status_code,
+				response_body=error_body
+			)
 		return resp.json()
 
 	@retry(
-		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		retry=retry_if_exception_type((NiFiError, requests.HTTPError, requests.ConnectionError, requests.Timeout)),
 		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
 		stop=stop_after_attempt(3),
 		reraise=True,
 	)
 	def _put(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
 		resp = self.session.put(self._url(path), json=data, timeout=self.timeout)
-		if resp.status_code == 401:
-			raise requests.HTTPError("Unauthorized", response=resp)
-		if resp.status_code == 403:
-			raise requests.HTTPError("Forbidden", response=resp)
-		resp.raise_for_status()
+		if not resp.ok:
+			# Capture detailed error information from NiFi API
+			error_body = resp.text if resp.text else "(empty response)"
+			raise NiFiError(
+				f"PUT {path} failed: {resp.reason}",
+				status_code=resp.status_code,
+				response_body=error_body
+			)
 		return resp.json()
 
 	@retry(
-		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		retry=retry_if_exception_type((NiFiError, requests.HTTPError, requests.ConnectionError, requests.Timeout)),
 		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
 		stop=stop_after_attempt(3),
 		reraise=True,
 	)
 	def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
 		resp = self.session.post(self._url(path), json=data, timeout=self.timeout)
-		if resp.status_code == 401:
-			raise requests.HTTPError("Unauthorized", response=resp)
-		if resp.status_code == 403:
-			raise requests.HTTPError("Forbidden", response=resp)
-		resp.raise_for_status()
+		if not resp.ok:
+			# Capture detailed error information from NiFi API
+			error_body = resp.text if resp.text else "(empty response)"
+			raise NiFiError(
+				f"POST {path} failed: {resp.reason}",
+				status_code=resp.status_code,
+				response_body=error_body
+			)
 		return resp.json()
 
 	@retry(
-		retry=retry_if_exception_type((requests.HTTPError, requests.ConnectionError, requests.Timeout)),
+		retry=retry_if_exception_type((NiFiError, requests.HTTPError, requests.ConnectionError, requests.Timeout)),
 		wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
 		stop=stop_after_attempt(3),
 		reraise=True,
 	)
 	def _delete(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 		resp = self.session.delete(self._url(path), params=params, timeout=self.timeout)
-		if resp.status_code == 401:
-			raise requests.HTTPError("Unauthorized", response=resp)
-		if resp.status_code == 403:
-			raise requests.HTTPError("Forbidden", response=resp)
-		resp.raise_for_status()
+		if not resp.ok:
+			# Capture detailed error information from NiFi API
+			error_body = resp.text if resp.text else "(empty response)"
+			raise NiFiError(
+				f"DELETE {path} failed: {resp.reason}",
+				status_code=resp.status_code,
+				response_body=error_body
+			)
 		return resp.json() if resp.content else {}
 
 	def get_version_info(self) -> Dict[str, Any]:
@@ -532,6 +556,29 @@ class NiFiClient:
 	def get_controller_service(self, service_id: str) -> Dict[str, Any]:
 		"""Get controller service details including properties and state."""
 		return self._get(f"controller-services/{service_id}")
+	
+	def find_controller_services_by_type(self, pg_id: Optional[str], service_type: str) -> List[Dict[str, Any]]:
+		"""Find all controller services of a specific type in a process group.
+		
+		Helps avoid 409 conflicts by checking if service already exists before creating.
+		
+		Args:
+			pg_id: Process group ID (None for controller-level services)
+			service_type: Fully qualified service type (e.g., "org.apache.nifi.distributed.cache.server.map.DistributedMapCacheServer")
+		
+		Returns:
+			List of matching controller services with their details.
+		"""
+		services_response = self.get_controller_services(pg_id)
+		services = services_response.get("controllerServices", [])
+		
+		matches = []
+		for svc in services:
+			component = svc.get("component", {})
+			if component.get("type") == service_type:
+				matches.append(svc)
+		
+		return matches
 	
 	def delete_controller_service(self, service_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
 		"""Delete a controller service. Requires NIFI_READONLY=false.

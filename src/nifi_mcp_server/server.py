@@ -402,15 +402,53 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 			data = nifi.update_controller_service(service_id, version, properties)
 			return _redact_sensitive(data)
 		
-		@app.tool()
-		async def get_controller_service_details(service_id: str) -> Dict[str, Any]:
-			"""Get detailed controller service information including properties and state.
-			
-			Use this to check current configuration before updates.
-			"""
-			data = nifi.get_controller_service(service_id)
-			return _redact_sensitive(data)
+	@app.tool()
+	async def get_controller_service_details(service_id: str) -> Dict[str, Any]:
+		"""Get detailed controller service information including properties and state.
 		
+		Use this to check current configuration before updates.
+		"""
+		data = nifi.get_controller_service(service_id)
+		return _redact_sensitive(data)
+	
+	@app.tool()
+	async def find_controller_services_by_type(process_group_id: str, service_type: str) -> Dict[str, Any]:
+		"""Find controller services by type to check if they already exist (read-only).
+		
+		Use this BEFORE creating controller services to avoid 409 Conflict errors.
+		
+		Args:
+			process_group_id: Process group ID (use "root" for controller-level)
+			service_type: Full service type name (e.g., "org.apache.nifi.distributed.cache.server.map.DistributedMapCacheServer")
+		
+		Returns list of matching services with their IDs, names, and states.
+		
+		Example:
+			Before creating a DistributedMapCacheServer, check if one already exists:
+			find_controller_services_by_type("root", "org.apache.nifi.distributed.cache.server.map.DistributedMapCacheServer")
+		"""
+		pg_id = None if process_group_id.lower() == "root" else process_group_id
+		matches = nifi.find_controller_services_by_type(pg_id, service_type)
+		
+		# Simplify output for LLM consumption
+		simplified = []
+		for svc in matches:
+			component = svc.get("component", {})
+			simplified.append({
+				"id": component.get("id"),
+				"name": component.get("name"),
+				"type": component.get("type"),
+				"state": component.get("state"),
+				"version": svc.get("revision", {}).get("version")
+			})
+		
+		return {
+			"count": len(simplified),
+			"services": simplified,
+			"message": f"Found {len(simplified)} existing service(s) of type {service_type}"
+		}
+	
+	if not readonly:
 		@app.tool()
 		async def delete_controller_service(service_id: str, version: int) -> Dict[str, Any]:
 			"""Delete a controller service. **WRITE OPERATION** - Requires NIFI_READONLY=false.
