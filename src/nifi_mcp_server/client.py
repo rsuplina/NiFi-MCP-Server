@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 from functools import lru_cache
 
 import requests
@@ -114,6 +114,42 @@ class NiFiClient:
 
 	def get_process_group(self, pg_id: str) -> Dict[str, Any]:
 		return self._get(f"flow/process-groups/{pg_id}")
+	
+	def create_process_group(self, parent_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+		"""Create a process group within a parent process group. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{parent_id}/process-groups",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"name": name,
+					"position": {"x": position_x, "y": position_y}
+				}
+			}
+		)
+	
+	def update_process_group(self, pg_id: str, version: int, name: str) -> Dict[str, Any]:
+		"""Update process group name. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"process-groups/{pg_id}",
+			{
+				"revision": {"version": version},
+				"component": {
+					"id": pg_id,
+					"name": name
+				}
+			}
+		)
+	
+	def delete_process_group(self, pg_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
+		"""Delete a process group. Requires NIFI_READONLY=false.
+		
+		Note: Process group must be empty (no processors, connections, or child groups).
+		"""
+		return self._delete(
+			f"process-groups/{pg_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
+		)
 
 	def list_processors(self, pg_id: str) -> Dict[str, Any]:
 		return self._get(f"process-groups/{pg_id}/processors")
@@ -131,6 +167,79 @@ class NiFiClient:
 	def list_parameter_contexts(self) -> Dict[str, Any]:
 		"""List parameter contexts (both 1.x and 2.x, schema may differ slightly)."""
 		return self._get("flow/parameter-contexts")
+	
+	def get_parameter_context(self, context_id: str) -> Dict[str, Any]:
+		"""Get a specific parameter context with its parameters."""
+		return self._get(f"parameter-contexts/{context_id}")
+	
+	def create_parameter_context(self, name: str, description: str = "", parameters: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+		"""Create a parameter context. Requires NIFI_READONLY=false.
+		
+		Parameters should be a list of dicts with 'name', 'value', 'sensitive', and optional 'description'.
+		Example: [{"name": "db.host", "value": "localhost", "sensitive": False}]
+		"""
+		param_list = []
+		if parameters:
+			for param in parameters:
+				param_entry = {
+					"parameter": {
+						"name": param.get("name"),
+						"value": param.get("value"),
+						"sensitive": param.get("sensitive", False)
+					}
+				}
+				if param.get("description"):
+					param_entry["parameter"]["description"] = param["description"]
+				param_list.append(param_entry)
+		
+		return self._post(
+			"parameter-contexts",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"name": name,
+					"description": description,
+					"parameters": param_list
+				}
+			}
+		)
+	
+	def update_parameter_context(self, context_id: str, version: int, name: str = None, description: str = None, parameters: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+		"""Update a parameter context. Requires NIFI_READONLY=false."""
+		component = {"id": context_id}
+		if name:
+			component["name"] = name
+		if description is not None:
+			component["description"] = description
+		if parameters:
+			param_list = []
+			for param in parameters:
+				param_entry = {
+					"parameter": {
+						"name": param.get("name"),
+						"value": param.get("value"),
+						"sensitive": param.get("sensitive", False)
+					}
+				}
+				if param.get("description"):
+					param_entry["parameter"]["description"] = param["description"]
+				param_list.append(param_entry)
+			component["parameters"] = param_list
+		
+		return self._put(
+			f"parameter-contexts/{context_id}",
+			{"revision": {"version": version}, "component": component}
+		)
+	
+	def delete_parameter_context(self, context_id: str, version: int) -> Dict[str, Any]:
+		"""Delete a parameter context. Requires NIFI_READONLY=false.
+		
+		Note: Context must not be referenced by any process groups.
+		"""
+		return self._delete(
+			f"parameter-contexts/{context_id}",
+			params={"version": version}
+		)
 
 	def get_controller_services(self, pg_id: Optional[str] = None) -> Dict[str, Any]:
 		"""Get controller services. If pg_id is None, gets controller-level services."""
@@ -159,6 +268,124 @@ class NiFiClient:
 	def get_output_ports(self, pg_id: str) -> Dict[str, Any]:
 		"""Get output ports for a process group."""
 		return self._get(f"process-groups/{pg_id}/output-ports")
+	
+	def create_input_port(self, pg_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+		"""Create an input port for receiving data from parent process group. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{pg_id}/input-ports",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"name": name,
+					"position": {"x": position_x, "y": position_y}
+				}
+			}
+		)
+	
+	def create_output_port(self, pg_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+		"""Create an output port for sending data to parent process group. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{pg_id}/output-ports",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"name": name,
+					"position": {"x": position_x, "y": position_y}
+				}
+			}
+		)
+	
+	def update_input_port(self, port_id: str, version: int, name: str, state: str = None) -> Dict[str, Any]:
+		"""Update input port. Requires NIFI_READONLY=false."""
+		component = {"id": port_id, "name": name}
+		if state:
+			component["state"] = state
+		return self._put(
+			f"input-ports/{port_id}",
+			{"revision": {"version": version}, "component": component}
+		)
+	
+	def update_output_port(self, port_id: str, version: int, name: str, state: str = None) -> Dict[str, Any]:
+		"""Update output port. Requires NIFI_READONLY=false."""
+		component = {"id": port_id, "name": name}
+		if state:
+			component["state"] = state
+		return self._put(
+			f"output-ports/{port_id}",
+			{"revision": {"version": version}, "component": component}
+		)
+	
+	def delete_input_port(self, port_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
+		"""Delete an input port. Requires NIFI_READONLY=false."""
+		return self._delete(
+			f"input-ports/{port_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
+		)
+	
+	def delete_output_port(self, port_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
+		"""Delete an output port. Requires NIFI_READONLY=false."""
+		return self._delete(
+			f"output-ports/{port_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
+		)
+	
+	def start_input_port(self, port_id: str, version: int) -> Dict[str, Any]:
+		"""Start an input port to enable data flow. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"input-ports/{port_id}/run-status",
+			{
+				"revision": {"version": version},
+				"state": "RUNNING"
+			}
+		)
+	
+	def stop_input_port(self, port_id: str, version: int) -> Dict[str, Any]:
+		"""Stop an input port to disable data flow. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"input-ports/{port_id}/run-status",
+			{
+				"revision": {"version": version},
+				"state": "STOPPED"
+			}
+		)
+	
+	def start_output_port(self, port_id: str, version: int) -> Dict[str, Any]:
+		"""Start an output port to enable data flow. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"output-ports/{port_id}/run-status",
+			{
+				"revision": {"version": version},
+				"state": "RUNNING"
+			}
+		)
+	
+	def stop_output_port(self, port_id: str, version: int) -> Dict[str, Any]:
+		"""Stop an output port to disable data flow. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"output-ports/{port_id}/run-status",
+			{
+				"revision": {"version": version},
+				"state": "STOPPED"
+			}
+		)
+	
+	def apply_parameter_context_to_process_group(self, pg_id: str, pg_version: int, context_id: str) -> Dict[str, Any]:
+		"""Apply a parameter context to a process group. Requires NIFI_READONLY=false.
+		
+		This enables the process group and its processors to use parameters from the context.
+		"""
+		return self._put(
+			f"process-groups/{pg_id}",
+			{
+				"revision": {"version": pg_version},
+				"component": {
+					"id": pg_id,
+					"parameterContext": {
+						"id": context_id
+					}
+				}
+			}
+		)
 
 	# ===== Write Methods (require NIFI_READONLY=false) =====
 	
@@ -274,6 +501,46 @@ class NiFiClient:
 		return self._put(
 			f"controller-services/{service_id}/run-status",
 			{"revision": {"version": version}, "state": "DISABLED"}
+		)
+	
+	def create_controller_service(self, pg_id: str, service_type: str, name: str) -> Dict[str, Any]:
+		"""Create a controller service in a process group. Requires NIFI_READONLY=false."""
+		return self._post(
+			f"process-groups/{pg_id}/controller-services",
+			{
+				"revision": {"version": 0},
+				"component": {
+					"type": service_type,
+					"name": name
+				}
+			}
+		)
+	
+	def update_controller_service(self, service_id: str, version: int, properties: Dict[str, str]) -> Dict[str, Any]:
+		"""Update controller service properties. Requires NIFI_READONLY=false."""
+		return self._put(
+			f"controller-services/{service_id}",
+			{
+				"revision": {"version": version},
+				"component": {
+					"id": service_id,
+					"properties": properties
+				}
+			}
+		)
+	
+	def get_controller_service(self, service_id: str) -> Dict[str, Any]:
+		"""Get controller service details including properties and state."""
+		return self._get(f"controller-services/{service_id}")
+	
+	def delete_controller_service(self, service_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
+		"""Delete a controller service. Requires NIFI_READONLY=false.
+		
+		Note: Service must be disabled and not referenced by any processors.
+		"""
+		return self._delete(
+			f"controller-services/{service_id}",
+			params={"version": version, "disconnectedNodeAcknowledged": str(disconnected_ack).lower()}
 		)
 	
 	# ===== Helper Methods for Common Patterns =====

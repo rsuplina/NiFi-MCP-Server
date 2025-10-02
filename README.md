@@ -10,7 +10,7 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
 - **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
 - **Read-only by default** - Safe exploration of NiFi flows and configuration
 - **Intelligent flow building** - Pattern recognition and requirements gathering for complex flows
-- **17 read-only MCP tools** for exploring NiFi:
+- **18 read-only MCP tools** for exploring NiFi:
   - `get_nifi_version()` - Version and build information
   - `get_root_process_group()` - Root process group details
   - `list_processors(process_group_id)` - List processors in a process group
@@ -28,7 +28,8 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `check_connection_queue(connection_id)` - Queue size (flowfiles + bytes)
   - `get_flow_summary(process_group_id)` - Flow statistics and health overview
   - `analyze_flow_build_request(user_request)` - Intelligent pattern recognition and requirements gathering
-- **11 write operations** (when `NIFI_READONLY=false`):
+  - `get_parameter_context_details(context_id)` - Get parameter context with all parameters
+- **36 write operations** (when `NIFI_READONLY=false`):
   - `start_processor(processor_id, version)` - Start a processor
   - `stop_processor(processor_id, version)` - Stop a processor
   - `create_processor(...)` - Create a new processor
@@ -37,8 +38,29 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `create_connection(...)` - Connect components
   - `delete_connection(connection_id, version)` - Delete a connection
   - `empty_connection_queue(connection_id)` - Empty flowfiles from queue (⚠️ data loss)
+  - `create_controller_service(pg_id, service_type, name)` - Create controller services (DBCPConnectionPool, RecordWriters, etc.)
+  - `update_controller_service_properties(service_id, version, properties)` - Configure service properties
+  - `get_controller_service_details(service_id)` - Get service configuration (read-only but listed here for context)
+  - `delete_controller_service(service_id, version)` - Remove controller services
   - `enable_controller_service(service_id, version)` - Enable a controller service
   - `disable_controller_service(service_id, version)` - Disable a controller service
+  - `create_process_group(parent_id, name, x, y)` - Create process groups (folders) for organizing flows
+  - `update_process_group_name(pg_id, version, name)` - Rename process groups
+  - `delete_process_group(pg_id, version)` - Remove empty process groups
+  - `create_input_port(pg_id, name, x, y)` - Create input ports for inter-process-group communication
+  - `create_output_port(pg_id, name, x, y)` - Create output ports for inter-process-group communication
+  - `update_input_port(port_id, version, name)` - Rename input ports
+  - `update_output_port(port_id, version, name)` - Rename output ports
+  - `delete_input_port(port_id, version)` - Remove input ports
+  - `delete_output_port(port_id, version)` - Remove output ports
+  - `create_parameter_context(name, description, parameters)` - Create parameter contexts for environment-specific config
+  - `update_parameter_context(context_id, version, ...)` - Update parameter contexts
+  - `delete_parameter_context(context_id, version)` - Remove parameter contexts
+  - `start_input_port(port_id, version)` - Start input port to enable data flow
+  - `stop_input_port(port_id, version)` - Stop input port
+  - `start_output_port(port_id, version)` - Start output port to enable data flow
+  - `stop_output_port(port_id, version)` - Stop output port
+  - `apply_parameter_context_to_process_group(pg_id, pg_version, context_id)` - Apply parameter context to enable #{param} usage
 
 ## Quick Start
 

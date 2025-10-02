@@ -310,6 +310,218 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 			"""Disable a controller service. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
 			data = nifi.disable_controller_service(service_id, version)
 			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def create_controller_service(process_group_id: str, service_type: str, name: str) -> Dict[str, Any]:
+			"""Create a controller service in a process group. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Common service types:
+			  - org.apache.nifi.dbcp.DBCPConnectionPool (Database connections)
+			  - org.apache.nifi.json.JsonRecordSetWriter (JSON output)
+			  - org.apache.nifi.avro.AvroRecordSetWriter (Avro output)
+			  - org.apache.nifi.csv.CSVRecordSetWriter (CSV output)
+			  - org.apache.nifi.json.JsonTreeReader (JSON input)
+			  - org.apache.nifi.avro.AvroReader (Avro input)
+			  - org.apache.nifi.csv.CSVReader (CSV input)
+			
+			Returns the created service with ID for configuration.
+			"""
+			data = nifi.create_controller_service(process_group_id, service_type, name)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def update_controller_service_properties(service_id: str, version: int, properties: Dict[str, str]) -> Dict[str, Any]:
+			"""Update controller service properties. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Note: Service must be in DISABLED state to update properties.
+			Use get_controller_service() to see available properties and current values.
+			"""
+			data = nifi.update_controller_service(service_id, version, properties)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def get_controller_service_details(service_id: str) -> Dict[str, Any]:
+			"""Get detailed controller service information including properties and state.
+			
+			Use this to check current configuration before updates.
+			"""
+			data = nifi.get_controller_service(service_id)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def delete_controller_service(service_id: str, version: int) -> Dict[str, Any]:
+			"""Delete a controller service. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Prerequisites:
+			  - Service must be DISABLED
+			  - No processors can reference this service
+			"""
+			data = nifi.delete_controller_service(service_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def create_process_group(parent_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+			"""Create a process group (folder) for organizing flows. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Process groups allow you to organize flows into logical sections:
+			  - Separate dev/test/prod environments
+			  - Group related processors
+			  - Create modular, reusable flow components
+			
+			Returns the created process group with ID for adding processors.
+			"""
+			data = nifi.create_process_group(parent_id, name, position_x, position_y)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def update_process_group_name(pg_id: str, version: int, name: str) -> Dict[str, Any]:
+			"""Rename a process group. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.update_process_group(pg_id, version, name)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def delete_process_group(pg_id: str, version: int) -> Dict[str, Any]:
+			"""Delete a process group. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Prerequisites:
+			  - Process group must be empty (no processors, connections, or child groups)
+			  - All components must be stopped
+			
+			Use this to clean up empty organizational groups.
+			"""
+			data = nifi.delete_process_group(pg_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def create_input_port(pg_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+			"""Create an input port for inter-process-group communication. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Input ports allow child process groups to receive data from parent groups.
+			Connect processors in parent group to this port to send data into the child group.
+			"""
+			data = nifi.create_input_port(pg_id, name, position_x, position_y)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def create_output_port(pg_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
+			"""Create an output port for inter-process-group communication. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Output ports allow child process groups to send data to parent groups.
+			Connect processors to this port, then connect the port to processors in parent group.
+			"""
+			data = nifi.create_output_port(pg_id, name, position_x, position_y)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def update_input_port(port_id: str, version: int, name: str) -> Dict[str, Any]:
+			"""Update (rename) an input port. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.update_input_port(port_id, version, name)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def update_output_port(port_id: str, version: int, name: str) -> Dict[str, Any]:
+			"""Update (rename) an output port. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.update_output_port(port_id, version, name)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def delete_input_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Delete an input port. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.delete_input_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def delete_output_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Delete an output port. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.delete_output_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def get_parameter_context_details(context_id: str) -> Dict[str, Any]:
+			"""Get parameter context with all parameters."""
+			data = nifi.get_parameter_context(context_id)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def create_parameter_context(name: str, description: str = "", parameters: str = "[]") -> Dict[str, Any]:
+			"""Create a parameter context for environment-specific configuration. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Parameters should be JSON array of objects with 'name', 'value', 'sensitive' fields.
+			Example: '[{"name":"db.host","value":"localhost","sensitive":false}]'
+			
+			Use cases:
+			  - Store database connection strings
+			  - Environment-specific URLs
+			  - API keys (use sensitive:true)
+			"""
+			import json
+			params_list = json.loads(parameters) if parameters != "[]" else None
+			data = nifi.create_parameter_context(name, description, params_list)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def update_parameter_context(context_id: str, version: int, name: str = None, parameters: str = None) -> Dict[str, Any]:
+			"""Update parameter context. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Parameters should be JSON array if provided.
+			"""
+			import json
+			params_list = json.loads(parameters) if parameters else None
+			data = nifi.update_parameter_context(context_id, version, name, None, params_list)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def delete_parameter_context(context_id: str, version: int) -> Dict[str, Any]:
+			"""Delete a parameter context. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Note: Context must not be referenced by any process groups.
+			"""
+			data = nifi.delete_parameter_context(context_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def start_input_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Start an input port to enable data flow. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Ports are created in STOPPED state by default and must be started to receive data.
+			"""
+			data = nifi.start_input_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def stop_input_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Stop an input port to disable data flow. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.stop_input_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def start_output_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Start an output port to enable data flow. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			Ports are created in STOPPED state by default and must be started to send data.
+			"""
+			data = nifi.start_output_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def stop_output_port(port_id: str, version: int) -> Dict[str, Any]:
+			"""Stop an output port to disable data flow. **WRITE OPERATION** - Requires NIFI_READONLY=false."""
+			data = nifi.stop_output_port(port_id, version)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def apply_parameter_context_to_process_group(pg_id: str, pg_version: int, context_id: str) -> Dict[str, Any]:
+			"""Apply a parameter context to a process group. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			This enables the process group and its processors to reference parameters using #{param_name} syntax.
+			
+			Example workflow:
+			  1. Create parameter context with db credentials
+			  2. Apply context to process group
+			  3. Use #{db.host}, #{db.password} in processor properties
+			"""
+			data = nifi.apply_parameter_context_to_process_group(pg_id, pg_version, context_id)
+			return _redact_sensitive(data)
 
 	return app
 
