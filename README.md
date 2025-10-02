@@ -1,10 +1,10 @@
 # NiFi MCP Server (via Knox)
 
-![](/screenshots/Nifi-meet-mcp.png)
-
-Model Context Protocol server providing read-only access to Apache NiFi via Apache Knox.
+Model Context Protocol server providing selectable read and write access to Apache NiFi via Apache Knox.
 
 **Works with both NiFi 1.x and 2.x** - automatic version detection and adaptation.
+
+![](/screenshots/Nifi-meet-mcp.png)
 
 ## Features
 
