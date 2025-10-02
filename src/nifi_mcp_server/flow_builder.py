@@ -255,15 +255,620 @@ class FlowPatternLibrary:
             ]
         )
     
+    @staticmethod
+    def database_to_files() -> FlowTemplate:
+        """Generic database export to files - works with any JDBC-compatible database"""
+        return FlowTemplate(
+            name="Database to Files",
+            description="""
+            Extract data from any database and write to files (JSON, Avro, CSV, etc.).
+            
+            Supports: MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, etc.
+            
+            💡 RECOMMENDED APPROACH:
+            1. For CDC/real-time: Check if NiFi has a CDC processor for your database
+               - MySQL: CaptureChangeMySQL (no JDBC driver needed!)
+               - MongoDB: CaptureChangeMongoDB
+               - SQL Server: CDC via Debezium connectors
+            2. For full exports: Use this JDBC-based approach
+            
+            ⚠️ JDBC Driver Required: Your NiFi administrator must install the appropriate 
+            JDBC driver on the NiFi server(s). Contact them if you encounter ClassNotFoundException errors.
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="database_type",
+                    description="Type of database (mysql, postgresql, oracle, sqlserver, etc.)",
+                    example="mysql"
+                ),
+                FlowRequirement(
+                    name="host",
+                    description="Database hostname or IP address",
+                    example="db.example.com"
+                ),
+                FlowRequirement(
+                    name="port",
+                    description="Database port",
+                    example="3306 (MySQL), 5432 (PostgreSQL), 1433 (SQL Server)"
+                ),
+                FlowRequirement(
+                    name="database_name",
+                    description="Database name to query",
+                    example="mydb"
+                ),
+                FlowRequirement(
+                    name="username",
+                    description="Database username",
+                    example="nifi_user"
+                ),
+                FlowRequirement(
+                    name="password",
+                    description="Database password",
+                    example="********"
+                ),
+                FlowRequirement(
+                    name="tables_or_query",
+                    description="Comma-separated table names OR custom SQL query",
+                    example="customers,orders OR SELECT * FROM customers WHERE updated > NOW() - INTERVAL 1 DAY",
+                    required=False
+                ),
+                FlowRequirement(
+                    name="output_format",
+                    description="Output format (json, avro, csv, parquet)",
+                    example="json",
+                    default="json"
+                ),
+                FlowRequirement(
+                    name="output_directory",
+                    description="Directory to write files",
+                    example="/tmp",
+                    default="/tmp"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.dbcp.DBCPConnectionPool",
+                "org.apache.nifi.processors.standard.QueryDatabaseTable",  # Or ExecuteSQL
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.UpdateAttribute",
+                "org.apache.nifi.processors.standard.PutFile"
+            ]
+        )
+    
+    @staticmethod
+    def files_to_database() -> FlowTemplate:
+        """Generic file ingestion to database - works with any JDBC-compatible database"""
+        return FlowTemplate(
+            name="Files to Database",
+            description="""
+            Ingest files (CSV, JSON, Avro, Parquet, XML) and write to any database.
+            
+            Supports: MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, etc.
+            Common use cases: Data lake → database, file uploads to DB, ETL pipelines
+            
+            ⚠️ JDBC Driver Required: Your NiFi administrator must install the JDBC driver for your target database.
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="source_directory",
+                    description="Directory containing files to ingest",
+                    example="/data/input"
+                ),
+                FlowRequirement(
+                    name="file_pattern",
+                    description="Pattern to match files (regex or glob)",
+                    example="*.csv or *.json",
+                    default="*"
+                ),
+                FlowRequirement(
+                    name="input_format",
+                    description="Input file format (csv, json, avro, parquet, xml)",
+                    example="csv"
+                ),
+                FlowRequirement(
+                    name="database_type",
+                    description="Type of target database",
+                    example="postgresql"
+                ),
+                FlowRequirement(
+                    name="host",
+                    description="Database hostname",
+                    example="db.example.com"
+                ),
+                FlowRequirement(
+                    name="port",
+                    description="Database port",
+                    example="5432"
+                ),
+                FlowRequirement(
+                    name="database_name",
+                    description="Target database name",
+                    example="warehouse"
+                ),
+                FlowRequirement(
+                    name="table_name",
+                    description="Target table name",
+                    example="staging_data"
+                ),
+                FlowRequirement(
+                    name="username",
+                    description="Database username",
+                    example="etl_user"
+                ),
+                FlowRequirement(
+                    name="password",
+                    description="Database password",
+                    example="********"
+                ),
+                FlowRequirement(
+                    name="insert_mode",
+                    description="INSERT or UPSERT (update if exists)",
+                    example="INSERT",
+                    default="INSERT"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.standard.ListFile",
+                "org.apache.nifi.processors.standard.FetchFile",
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.PutDatabaseRecord",
+                "org.apache.nifi.dbcp.DBCPConnectionPool"
+            ]
+        )
+    
+    @staticmethod
+    def object_storage_to_database() -> FlowTemplate:
+        """Cloud object storage (S3/Azure/GCS) to database"""
+        return FlowTemplate(
+            name="Object Storage to Database",
+            description="""
+            Ingest files from cloud storage (S3, Azure Blob, GCS) and load to database.
+            
+            Common use cases: Data lake → warehouse, cloud ETL, analytics pipelines
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="cloud_provider",
+                    description="Cloud provider (aws, azure, gcp)",
+                    example="aws"
+                ),
+                FlowRequirement(
+                    name="bucket_or_container",
+                    description="S3 bucket / Azure container / GCS bucket name",
+                    example="my-data-lake"
+                ),
+                FlowRequirement(
+                    name="path_prefix",
+                    description="Path prefix or folder to scan",
+                    example="data/raw/",
+                    required=False
+                ),
+                FlowRequirement(
+                    name="file_pattern",
+                    description="Pattern to match files",
+                    example="*.parquet",
+                    default="*"
+                ),
+                FlowRequirement(
+                    name="credentials_type",
+                    description="How to authenticate (access_key, iam_role, managed_identity, service_account)",
+                    example="access_key"
+                ),
+                FlowRequirement(
+                    name="database_type",
+                    description="Target database type",
+                    example="postgresql"
+                ),
+                FlowRequirement(
+                    name="database_connection_string",
+                    description="JDBC connection string",
+                    example="jdbc:postgresql://host:5432/dbname"
+                ),
+                FlowRequirement(
+                    name="table_name",
+                    description="Target table name",
+                    example="analytics_data"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.aws.s3.ListS3",  # Or Azure/GCS equivalent
+                "org.apache.nifi.processors.aws.s3.FetchS3Object",
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.PutDatabaseRecord"
+            ]
+        )
+    
+    @staticmethod
+    def database_to_database() -> FlowTemplate:
+        """Database to database replication/sync"""
+        return FlowTemplate(
+            name="Database to Database",
+            description="""
+            Replicate or synchronize data between databases.
+            
+            Common use cases: Database migration, cross-database ETL, data warehouse loading
+            Supports: Any JDBC-compatible databases (MySQL ↔ PostgreSQL, Oracle → SQL Server, etc.)
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="source_database_type",
+                    description="Source database type",
+                    example="mysql"
+                ),
+                FlowRequirement(
+                    name="source_host",
+                    description="Source database host",
+                    example="source-db.example.com"
+                ),
+                FlowRequirement(
+                    name="source_port",
+                    description="Source database port",
+                    example="3306"
+                ),
+                FlowRequirement(
+                    name="source_database",
+                    description="Source database name",
+                    example="production"
+                ),
+                FlowRequirement(
+                    name="source_username",
+                    description="Source database username",
+                    example="readonly_user"
+                ),
+                FlowRequirement(
+                    name="source_password",
+                    description="Source database password",
+                    example="********"
+                ),
+                FlowRequirement(
+                    name="target_database_type",
+                    description="Target database type",
+                    example="postgresql"
+                ),
+                FlowRequirement(
+                    name="target_host",
+                    description="Target database host",
+                    example="target-db.example.com"
+                ),
+                FlowRequirement(
+                    name="target_port",
+                    description="Target database port",
+                    example="5432"
+                ),
+                FlowRequirement(
+                    name="target_database",
+                    description="Target database name",
+                    example="warehouse"
+                ),
+                FlowRequirement(
+                    name="target_username",
+                    description="Target database username",
+                    example="write_user"
+                ),
+                FlowRequirement(
+                    name="target_password",
+                    description="Target database password",
+                    example="********"
+                ),
+                FlowRequirement(
+                    name="sync_mode",
+                    description="full (one-time copy) or incremental (ongoing sync)",
+                    example="incremental",
+                    default="incremental"
+                ),
+                FlowRequirement(
+                    name="tables",
+                    description="Comma-separated list of tables to sync",
+                    example="users,orders,products"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.dbcp.DBCPConnectionPool",  # Source
+                "org.apache.nifi.dbcp.DBCPConnectionPool",  # Target  
+                "org.apache.nifi.processors.standard.QueryDatabaseTable",
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.PutDatabaseRecord"
+            ]
+        )
+    
+    @staticmethod
+    def streaming_to_database() -> FlowTemplate:
+        """Streaming platforms (Kafka/Pulsar) to database"""
+        return FlowTemplate(
+            name="Streaming to Database",
+            description="""
+            Consume streaming data from Kafka/Pulsar and load to database in real-time.
+            
+            Common use cases: Event processing, real-time analytics, stream-to-warehouse
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="streaming_platform",
+                    description="Streaming platform (kafka, pulsar)",
+                    example="kafka"
+                ),
+                FlowRequirement(
+                    name="brokers",
+                    description="Comma-separated list of broker addresses",
+                    example="broker1:9092,broker2:9092"
+                ),
+                FlowRequirement(
+                    name="topic",
+                    description="Topic name to consume",
+                    example="events"
+                ),
+                FlowRequirement(
+                    name="consumer_group",
+                    description="Consumer group ID",
+                    example="nifi-consumer-group",
+                    default="nifi-consumer"
+                ),
+                FlowRequirement(
+                    name="message_format",
+                    description="Message format (json, avro, protobuf, csv)",
+                    example="json",
+                    default="json"
+                ),
+                FlowRequirement(
+                    name="database_type",
+                    description="Target database type",
+                    example="postgresql"
+                ),
+                FlowRequirement(
+                    name="database_connection_string",
+                    description="JDBC connection string",
+                    example="jdbc:postgresql://host:5432/events_db"
+                ),
+                FlowRequirement(
+                    name="table_name",
+                    description="Target table name",
+                    example="events"
+                ),
+                FlowRequirement(
+                    name="batch_size",
+                    description="Number of records to batch before insert",
+                    example="1000",
+                    default="1000"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.kafka.pubsub.ConsumeKafka",
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.PutDatabaseRecord",
+                "org.apache.nifi.dbcp.DBCPConnectionPool"
+            ]
+        )
+    
+    @staticmethod
+    def ftp_to_processing() -> FlowTemplate:
+        """FTP/SFTP file ingestion and processing"""
+        return FlowTemplate(
+            name="FTP/SFTP to Processing",
+            description="""
+            Monitor FTP/SFTP servers for new files and process them.
+            
+            Common use cases: Partner data exchange, legacy system integration, B2B file transfers
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="protocol",
+                    description="Protocol (ftp or sftp)",
+                    example="sftp"
+                ),
+                FlowRequirement(
+                    name="host",
+                    description="FTP/SFTP server hostname",
+                    example="ftp.partner.com"
+                ),
+                FlowRequirement(
+                    name="port",
+                    description="Port number",
+                    example="22 (SFTP), 21 (FTP)",
+                    default="22"
+                ),
+                FlowRequirement(
+                    name="username",
+                    description="FTP/SFTP username",
+                    example="transfer_user"
+                ),
+                FlowRequirement(
+                    name="password",
+                    description="Password or leave blank for key-based auth",
+                    example="********",
+                    required=False
+                ),
+                FlowRequirement(
+                    name="remote_path",
+                    description="Remote directory path to monitor",
+                    example="/incoming/data"
+                ),
+                FlowRequirement(
+                    name="file_pattern",
+                    description="Pattern to match files",
+                    example="*.csv",
+                    default="*"
+                ),
+                FlowRequirement(
+                    name="polling_interval",
+                    description="How often to check for new files",
+                    example="5 min",
+                    default="5 min"
+                ),
+                FlowRequirement(
+                    name="destination_type",
+                    description="Where to send processed files (local, s3, database)",
+                    example="local"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.standard.ListSFTP",  # Or ListFTP
+                "org.apache.nifi.processors.standard.FetchSFTP",
+                "org.apache.nifi.processors.standard.UnpackContent",
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.PutFile"  # Or PutS3, PutDatabase, etc.
+            ]
+        )
+    
+    @staticmethod
+    def data_transformation() -> FlowTemplate:
+        """Generic data transformation pipeline"""
+        return FlowTemplate(
+            name="Data Transformation",
+            description="""
+            Transform data from one format to another with validation and enrichment.
+            
+            Common use cases: ETL, data cleansing, format conversion, schema evolution
+            Supports: JSON ↔ CSV ↔ Avro ↔ Parquet ↔ XML
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="source_type",
+                    description="Where data comes from (file, database, api, kafka)",
+                    example="file"
+                ),
+                FlowRequirement(
+                    name="source_format",
+                    description="Input data format (csv, json, avro, xml, parquet)",
+                    example="csv"
+                ),
+                FlowRequirement(
+                    name="target_format",
+                    description="Output data format (csv, json, avro, xml, parquet)",
+                    example="parquet"
+                ),
+                FlowRequirement(
+                    name="transformations",
+                    description="Transformations needed (filter, enrich, aggregate, pivot, etc.)",
+                    example="filter invalid records, add timestamp",
+                    required=False
+                ),
+                FlowRequirement(
+                    name="destination_type",
+                    description="Where to send results (file, database, s3, kafka)",
+                    example="s3"
+                ),
+                FlowRequirement(
+                    name="error_handling",
+                    description="How to handle bad records (skip, route_to_dead_letter, fail)",
+                    example="route_to_dead_letter",
+                    default="route_to_dead_letter"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.standard.ConvertRecord",
+                "org.apache.nifi.processors.standard.QueryRecord",
+                "org.apache.nifi.processors.standard.UpdateRecord",
+                "org.apache.nifi.processors.standard.ValidateRecord",
+                "org.apache.nifi.processors.standard.RouteOnAttribute"
+            ]
+        )
+    
+    @staticmethod
+    def log_aggregation() -> FlowTemplate:
+        """Log file collection and aggregation"""
+        return FlowTemplate(
+            name="Log Aggregation",
+            description="""
+            Collect logs from multiple sources and aggregate to central location.
+            
+            Common use cases: Application logging, security logs, audit trails, observability
+            """,
+            requirements=[
+                FlowRequirement(
+                    name="log_source_type",
+                    description="Log source (file, syslog, http, kafka)",
+                    example="file"
+                ),
+                FlowRequirement(
+                    name="log_locations",
+                    description="Comma-separated log file paths or endpoints",
+                    example="/var/log/app/*.log, /var/log/nginx/*.log"
+                ),
+                FlowRequirement(
+                    name="log_format",
+                    description="Log format (json, syslog, apache, custom)",
+                    example="json",
+                    default="json"
+                ),
+                FlowRequirement(
+                    name="parse_logs",
+                    description="Parse logs or keep as raw text (yes/no)",
+                    example="yes",
+                    default="yes"
+                ),
+                FlowRequirement(
+                    name="destination_type",
+                    description="Where to send logs (elasticsearch, s3, kafka, splunk)",
+                    example="elasticsearch"
+                ),
+                FlowRequirement(
+                    name="retention_days",
+                    description="How long to retain logs",
+                    example="30",
+                    default="30"
+                ),
+                FlowRequirement(
+                    name="add_metadata",
+                    description="Add hostname, app name, environment tags (yes/no)",
+                    example="yes",
+                    default="yes"
+                ),
+            ],
+            processor_types=[
+                "org.apache.nifi.processors.standard.TailFile",  # Or ListenSyslog, etc.
+                "org.apache.nifi.processors.standard.ExtractText",
+                "org.apache.nifi.processors.standard.UpdateAttribute",
+                "org.apache.nifi.processors.standard.MergeContent",
+                "org.apache.nifi.processors.elasticsearch.PutElasticsearch"  # Or PutS3, PublishKafka
+            ]
+        )
+    
     @classmethod
     def get_template(cls, pattern_name: str) -> Optional[FlowTemplate]:
         """Get a flow template by name or description match"""
         patterns = {
+            # Database patterns
+            "database_to_files": cls.database_to_files,
+            "db_to_files": cls.database_to_files,
+            "database_export": cls.database_to_files,
+            "files_to_database": cls.files_to_database,
+            "file_to_db": cls.files_to_database,
+            "database_to_database": cls.database_to_database,
+            "db_to_db": cls.database_to_database,
+            "database_replication": cls.database_to_database,
+            "database_sync": cls.database_to_database,
+            
+            # Cloud/Object Storage patterns
+            "object_storage_to_database": cls.object_storage_to_database,
+            "s3_to_database": cls.object_storage_to_database,
+            "azure_to_database": cls.object_storage_to_database,
+            "gcs_to_database": cls.object_storage_to_database,
+            
+            # Streaming patterns
+            "streaming_to_database": cls.streaming_to_database,
+            "kafka_to_database": cls.streaming_to_database,
+            "kafka_to_db": cls.streaming_to_database,
+            "kafka_to_s3": cls.kafka_to_s3,
+            "kafka_s3": cls.kafka_to_s3,
+            
+            # FTP patterns
+            "ftp_to_processing": cls.ftp_to_processing,
+            "sftp_to_processing": cls.ftp_to_processing,
+            "ftp": cls.ftp_to_processing,
+            
+            # Transform patterns
+            "data_transformation": cls.data_transformation,
+            "transform": cls.data_transformation,
+            "etl": cls.data_transformation,
+            
+            # Log patterns
+            "log_aggregation": cls.log_aggregation,
+            "logs": cls.log_aggregation,
+            "log_collection": cls.log_aggregation,
+            
+            # Specific patterns (for backwards compatibility)
             "sql_server_to_iceberg": cls.sql_server_to_iceberg,
             "sql_to_iceberg": cls.sql_server_to_iceberg,
             "database_to_iceberg": cls.sql_server_to_iceberg,
-            "kafka_to_s3": cls.kafka_to_s3,
-            "kafka_s3": cls.kafka_to_s3,
             "rest_api_to_database": cls.rest_api_to_database,
             "api_to_db": cls.rest_api_to_database,
             "file_watcher": cls.file_watcher_to_processing,
@@ -285,10 +890,29 @@ class FlowPatternLibrary:
     def list_available_templates(cls) -> List[Dict[str, str]]:
         """List all available flow templates"""
         return [
-            {"name": "SQL Server to Iceberg", "key": "sql_server_to_iceberg"},
-            {"name": "Kafka to S3", "key": "kafka_to_s3"},
-            {"name": "REST API to Database", "key": "rest_api_to_database"},
-            {"name": "File Watcher to Processing", "key": "file_watcher"},
+            # Database patterns
+            {"name": "Database → Files", "key": "database_to_files"},
+            {"name": "Files → Database", "key": "files_to_database"},
+            {"name": "Database → Database", "key": "database_to_database"},
+            {"name": "Database → Iceberg", "key": "sql_server_to_iceberg"},
+            
+            # Cloud/Object Storage patterns
+            {"name": "Object Storage → Database (S3/Azure/GCS)", "key": "object_storage_to_database"},
+            {"name": "Kafka → S3", "key": "kafka_to_s3"},
+            
+            # Streaming patterns
+            {"name": "Streaming → Database (Kafka/Pulsar)", "key": "streaming_to_database"},
+            
+            # File patterns
+            {"name": "FTP/SFTP → Processing", "key": "ftp_to_processing"},
+            {"name": "File Watcher → Processing", "key": "file_watcher"},
+            
+            # REST API patterns
+            {"name": "REST API → Database", "key": "rest_api_to_database"},
+            
+            # ETL patterns
+            {"name": "Data Transformation (ETL)", "key": "data_transformation"},
+            {"name": "Log Aggregation", "key": "log_aggregation"},
         ]
 
 
@@ -298,28 +922,92 @@ class FlowBuilderGuide:
     @staticmethod
     def identify_pattern(user_request: str) -> Optional[FlowTemplate]:
         """
-        Analyze user request and identify matching flow pattern
+        Analyze user request and identify matching flow pattern using generic keyword detection.
         
         Examples:
-            "Build a flow from SQL Server to Iceberg"
-            "I need to move data from Kafka to S3"
-            "Create a REST API to database pipeline"
+            "Copy MySQL tables to JSON files" → Database → Files
+            "Load CSV files into PostgreSQL" → Files → Database
+            "Sync Oracle to Snowflake" → Database → Database
+            "Stream Kafka to S3" → Streaming → Object Storage
+            "Transform CSV to Parquet" → Data Transformation
+            "Collect logs from servers" → Log Aggregation
         """
         request_lower = user_request.lower()
         
-        # Pattern matching keywords
-        if any(word in request_lower for word in ["sql server", "sqlserver", "mssql"]) and \
-           any(word in request_lower for word in ["iceberg"]):
+        # Source keywords
+        database_src = ["mysql", "postgres", "postgresql", "oracle", "sqlserver", "mariadb", "mssql", "database", "db", "sql"]
+        file_src = ["file", "files", "csv", "json", "xml", "avro", "parquet"]
+        cloud_src = ["s3", "azure blob", "gcs", "google cloud storage", "object storage", "bucket"]
+        streaming_src = ["kafka", "pulsar", "kinesis", "stream", "event"]
+        ftp_src = ["ftp", "sftp", "ssh"]
+        api_src = ["api", "rest", "http", "endpoint"]
+        log_src = ["log", "logs", "logging", "syslog"]
+        
+        # Destination/action keywords
+        database_dest = has_database = any(word in request_lower for word in database_src)
+        file_dest = any(word in request_lower for word in file_src)
+        cloud_dest = any(word in request_lower for word in cloud_src)
+        
+        # Action keywords
+        transform_keywords = ["transform", "convert", "etl", "clean", "enrich", "validate"]
+        sync_keywords = ["sync", "replicate", "migrate", "copy", "move"]
+        watch_keywords = ["watch", "monitor", "poll"]
+        aggregate_keywords = ["aggregate", "collect", "gather", "centralize"]
+        
+        # Pattern matching logic (order matters - most specific first)
+        
+        # Iceberg pattern (very specific)
+        if "iceberg" in request_lower and any(word in request_lower for word in database_src):
             return FlowPatternLibrary.get_template("sql_server_to_iceberg")
         
+        # Streaming to database
+        if any(word in request_lower for word in streaming_src) and database_dest:
+            return FlowPatternLibrary.get_template("streaming_to_database")
+        
+        # Kafka to S3
         if "kafka" in request_lower and "s3" in request_lower:
             return FlowPatternLibrary.get_template("kafka_to_s3")
         
-        if any(word in request_lower for word in ["api", "rest", "http"]) and \
-           any(word in request_lower for word in ["database", "db", "postgres", "mysql"]):
+        # Object storage to database
+        if any(word in request_lower for word in cloud_src) and database_dest:
+            return FlowPatternLibrary.get_template("object_storage_to_database")
+        
+        # FTP/SFTP ingestion
+        if any(word in request_lower for word in ftp_src):
+            return FlowPatternLibrary.get_template("ftp_to_processing")
+        
+        # Log aggregation
+        if any(word in request_lower for word in log_src) and any(word in request_lower for word in aggregate_keywords):
+            return FlowPatternLibrary.get_template("log_aggregation")
+        
+        # Database to database (sync/replication)
+        if database_dest and any(word in request_lower for word in sync_keywords):
+            # Check if there are indicators of source database too
+            db_count = sum(1 for word in database_src if word in request_lower)
+            if db_count >= 2 or "to" in request_lower:  # e.g., "mysql to postgres"
+                return FlowPatternLibrary.get_template("database_to_database")
+        
+        # Files to database
+        if any(word in request_lower for word in file_src) and database_dest and \
+           any(word in request_lower for word in ["load", "import", "ingest", "insert", "to"]):
+            return FlowPatternLibrary.get_template("files_to_database")
+        
+        # Database to files
+        if database_dest and file_dest and \
+           any(word in request_lower for word in ["export", "extract", "dump", "copy", "save"]):
+            return FlowPatternLibrary.get_template("database_to_files")
+        
+        # Data transformation
+        if any(word in request_lower for word in transform_keywords):
+            return FlowPatternLibrary.get_template("data_transformation")
+        
+        # REST API to Database
+        if any(word in request_lower for word in api_src) and database_dest:
             return FlowPatternLibrary.get_template("rest_api_to_database")
         
-        if any(word in request_lower for word in ["file", "directory", "watch", "monitor"]):
+        # File watcher
+        if any(word in request_lower for word in watch_keywords) and \
+           any(word in request_lower for word in ["file", "directory", "folder"]):
             return FlowPatternLibrary.get_template("file_watcher")
         
         return None
