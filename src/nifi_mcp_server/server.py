@@ -10,6 +10,8 @@ from .config import ServerConfig
 from .auth import KnoxAuthFactory
 from .client import NiFiClient
 from .flow_builder import analyze_flow_request
+from .best_practices import NiFiBestPractices, SmartFlowBuilder
+from .setup_helper import SetupGuide
 
 
 # Lazy import of MCP to give a clear error if the dependency is missing
@@ -196,6 +198,67 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 		Use this BEFORE attempting to create processors for complex flows.
 		"""
 		return analyze_flow_request(user_request)
+	
+	@app.tool()
+	async def get_setup_instructions() -> str:
+		"""Get comprehensive setup instructions for configuring the NiFi MCP Server.
+		
+		Use this when:
+		  - User asks "how do I configure this?"
+		  - Connection errors suggest missing configuration
+		  - User needs help with environment variables
+		
+		Returns detailed setup guide with examples for CDP NiFi and standalone NiFi.
+		"""
+		return SetupGuide.get_setup_instructions()
+	
+	@app.tool()
+	async def check_configuration() -> Dict[str, Any]:
+		"""Check current NiFi MCP Server configuration and validate it.
+		
+		Use this when:
+		  - User asks "is my configuration correct?"
+		  - Troubleshooting connection issues
+		  - Before attempting to connect to NiFi
+		
+		Returns validation results with errors and warnings.
+		"""
+		is_valid, errors, warnings = SetupGuide.validate_current_config()
+		return {
+			"is_valid": is_valid,
+			"errors": errors,
+			"warnings": warnings,
+			"message": "Configuration is valid" if is_valid else "Configuration has errors"
+		}
+	
+	@app.tool()
+	async def get_best_practices_guide() -> str:
+		"""Get NiFi flow building best practices guide.
+		
+		Use this when:
+		  - User asks "what are best practices?"
+		  - User is building their first flow
+		  - User wants to understand proper flow organization
+		
+		Returns comprehensive guide covering process groups, naming, lifecycle, etc.
+		"""
+		return NiFiBestPractices.get_best_practices_guide()
+	
+	@app.tool()
+	async def get_recommended_workflow(user_request: str) -> str:
+		"""Get recommended step-by-step workflow for building a specific flow.
+		
+		Use this when:
+		  - User asks "how should I build this flow?"
+		  - User needs guidance on the order of operations
+		  - User is unsure where to start
+		
+		Args:
+		  user_request: Description of the flow the user wants to build
+		
+		Returns step-by-step workflow with best practices.
+		"""
+		return NiFiBestPractices.get_recommended_workflow_for_request(user_request)
 
 	# ===== Write Tools (only enabled when NIFI_READONLY=false) =====
 
@@ -360,6 +423,29 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 			return _redact_sensitive(data)
 		
 		@app.tool()
+		async def start_new_flow(flow_name: str, parent_pg_id: str = None) -> Dict[str, Any]:
+			"""Start a new NiFi flow following best practices. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			🌟 RECOMMENDED WAY to start building flows!
+			
+			This tool automatically:
+			  1. Creates a process group for your flow (best practice!)
+			  2. Returns the group ID for adding components
+			  3. Provides next steps guidance
+			
+			Use this INSTEAD of creating processors directly on root canvas.
+			
+			Args:
+			  flow_name: Descriptive name for your flow (e.g., "ETL Pipeline", "Kafka Integration")
+			  parent_pg_id: Optional parent process group (defaults to root)
+			
+			Example: start_new_flow("Data Ingestion Pipeline")
+			"""
+			smart_builder = SmartFlowBuilder(nifi)
+			result = smart_builder.start_new_flow(flow_name, parent_pg_id)
+			return _redact_sensitive(result)
+		
+		@app.tool()
 		async def create_process_group(parent_id: str, name: str, position_x: float = 0.0, position_y: float = 0.0) -> Dict[str, Any]:
 			"""Create a process group (folder) for organizing flows. **WRITE OPERATION** - Requires NIFI_READONLY=false.
 			
@@ -367,6 +453,8 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 			  - Separate dev/test/prod environments
 			  - Group related processors
 			  - Create modular, reusable flow components
+			
+			💡 TIP: Consider using start_new_flow() instead - it follows best practices automatically!
 			
 			Returns the created process group with ID for adding processors.
 			"""
