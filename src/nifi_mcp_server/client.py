@@ -605,5 +605,189 @@ class NiFiClient:
 			'totalFlowFilesQueued': total_queued,
 			'totalBytesQueued': total_bytes
 		}
+	
+	def start_all_processors_in_group(self, pg_id: str) -> Dict[str, Any]:
+		"""Start all processors in a process group. Requires NIFI_READONLY=false.
+		
+		This is a bulk operation that starts all processors at once, much faster than starting individually.
+		"""
+		processors = self.list_processors(pg_id)
+		results = {"started": [], "failed": [], "already_running": []}
+		
+		for proc in processors.get("processors", []):
+			proc_id = proc["id"]
+			proc_state = proc.get("status", {}).get("runStatus", "STOPPED")
+			version = proc.get("revision", {}).get("version", 0)
+			
+			if proc_state == "Running":
+				results["already_running"].append({"id": proc_id, "name": proc.get("component", {}).get("name")})
+			else:
+				try:
+					self.start_processor(proc_id, version)
+					results["started"].append({"id": proc_id, "name": proc.get("component", {}).get("name")})
+				except Exception as e:
+					results["failed"].append({"id": proc_id, "name": proc.get("component", {}).get("name"), "error": str(e)})
+		
+		return results
+	
+	def stop_all_processors_in_group(self, pg_id: str) -> Dict[str, Any]:
+		"""Stop all processors in a process group. Requires NIFI_READONLY=false.
+		
+		This is a bulk operation that stops all processors at once, much faster than stopping individually.
+		"""
+		processors = self.list_processors(pg_id)
+		results = {"stopped": [], "failed": [], "already_stopped": []}
+		
+		for proc in processors.get("processors", []):
+			proc_id = proc["id"]
+			proc_state = proc.get("status", {}).get("runStatus", "STOPPED")
+			version = proc.get("revision", {}).get("version", 0)
+			
+			if proc_state == "Stopped":
+				results["already_stopped"].append({"id": proc_id, "name": proc.get("component", {}).get("name")})
+			else:
+				try:
+					self.stop_processor(proc_id, version)
+					results["stopped"].append({"id": proc_id, "name": proc.get("component", {}).get("name")})
+				except Exception as e:
+					results["failed"].append({"id": proc_id, "name": proc.get("component", {}).get("name"), "error": str(e)})
+		
+		return results
+	
+	def enable_all_controller_services_in_group(self, pg_id: str) -> Dict[str, Any]:
+		"""Enable all controller services in a process group scope. Requires NIFI_READONLY=false.
+		
+		This is a bulk operation that enables all services at once.
+		"""
+		services = self.get_controller_services(pg_id)
+		results = {"enabled": [], "failed": [], "already_enabled": []}
+		
+		for svc in services.get("controllerServices", []):
+			svc_id = svc["id"]
+			svc_state = svc.get("component", {}).get("state", "DISABLED")
+			version = svc.get("revision", {}).get("version", 0)
+			
+			if svc_state == "ENABLED":
+				results["already_enabled"].append({"id": svc_id, "name": svc.get("component", {}).get("name")})
+			else:
+				try:
+					self.enable_controller_service(svc_id, version)
+					results["enabled"].append({"id": svc_id, "name": svc.get("component", {}).get("name")})
+				except Exception as e:
+					results["failed"].append({"id": svc_id, "name": svc.get("component", {}).get("name"), "error": str(e)})
+		
+		return results
+	
+	def get_flow_health_status(self, pg_id: str) -> Dict[str, Any]:
+		"""Get comprehensive health status of a process group and all its components.
+		
+		Returns detailed health information including:
+		- Processor status (running/stopped/invalid)
+		- Controller service status (enabled/disabled/invalid)
+		- Connection queue status
+		- Active bulletins/errors
+		- Overall health assessment
+		"""
+		health = {
+			"processGroupId": pg_id,
+			"processors": {"total": 0, "running": 0, "stopped": 0, "invalid": 0, "disabled": 0},
+			"controllerServices": {"total": 0, "enabled": 0, "disabled": 0, "invalid": 0},
+			"connections": {"total": 0, "with_queued_data": 0, "backpressure": 0},
+			"bulletins": [],
+			"errors": [],
+			"overallHealth": "HEALTHY"
+		}
+		
+		# Get processors
+		processors = self.list_processors(pg_id)
+		for proc in processors.get("processors", []):
+			health["processors"]["total"] += 1
+			run_status = proc.get("status", {}).get("runStatus", "STOPPED")
+			
+			if run_status == "Running":
+				health["processors"]["running"] += 1
+			elif run_status == "Stopped":
+				health["processors"]["stopped"] += 1
+			elif run_status == "Invalid":
+				health["processors"]["invalid"] += 1
+				health["errors"].append(f"Processor '{proc.get('component', {}).get('name')}' is invalid")
+			elif run_status == "Disabled":
+				health["processors"]["disabled"] += 1
+		
+		# Get controller services
+		try:
+			services = self.get_controller_services(pg_id)
+			for svc in services.get("controllerServices", []):
+				health["controllerServices"]["total"] += 1
+				state = svc.get("component", {}).get("state", "DISABLED")
+				
+				if state == "ENABLED":
+					health["controllerServices"]["enabled"] += 1
+				elif state == "DISABLED":
+					health["controllerServices"]["disabled"] += 1
+				elif "INVALID" in state or "ERROR" in state:
+					health["controllerServices"]["invalid"] += 1
+					health["errors"].append(f"Service '{svc.get('component', {}).get('name')}' is invalid")
+		except Exception:
+			pass  # Services might not be accessible at all levels
+		
+		# Get connections
+		connections = self.list_connections(pg_id)
+		for conn in connections.get("connections", []):
+			health["connections"]["total"] += 1
+			status = conn.get("status", {})
+			queued_count = status.get("aggregateSnapshot", {}).get("flowFilesQueued", 0)
+			
+			if queued_count > 0:
+				health["connections"]["with_queued_data"] += 1
+			
+			# Check backpressure
+			if status.get("aggregateSnapshot", {}).get("percentUseCount", 0) > 80:
+				health["connections"]["backpressure"] += 1
+				health["errors"].append(f"Connection has backpressure (>80% full)")
+		
+		# Get recent bulletins
+		try:
+			bulletins_data = self.get_bulletins()
+			recent_bulletins = bulletins_data.get("bulletinBoard", {}).get("bulletins", [])
+			for bulletin in recent_bulletins[:10]:  # Last 10
+				health["bulletins"].append({
+					"level": bulletin.get("bulletin", {}).get("level"),
+					"message": bulletin.get("bulletin", {}).get("message"),
+					"timestamp": bulletin.get("bulletin", {}).get("timestamp")
+				})
+				if bulletin.get("bulletin", {}).get("level") in ["ERROR", "WARN"]:
+					health["errors"].append(bulletin.get("bulletin", {}).get("message"))
+		except Exception:
+			pass
+		
+		# Determine overall health
+		if health["processors"]["invalid"] > 0 or health["controllerServices"]["invalid"] > 0:
+			health["overallHealth"] = "UNHEALTHY"
+		elif health["connections"]["backpressure"] > 0 or len(health["errors"]) > 0:
+			health["overallHealth"] = "DEGRADED"
+		else:
+			health["overallHealth"] = "HEALTHY"
+		
+		return health
+	
+	def terminate_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+		"""Forcefully terminate all threads for a stuck processor. Requires NIFI_READONLY=false.
+		
+		⚠️ WARNING: This is a last-resort operation for processors that won't stop normally.
+		Use only when a processor is stuck and not responding to normal stop commands.
+		"""
+		# First try to stop normally
+		try:
+			self.stop_processor(processor_id, version)
+			return {"status": "stopped_normally", "message": "Processor stopped without needing termination"}
+		except Exception:
+			pass
+		
+		# If normal stop fails, terminate threads
+		return self._delete(
+			f"processors/{processor_id}/threads",
+			params={"version": version}
+		)
 
 

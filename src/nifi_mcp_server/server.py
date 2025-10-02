@@ -522,6 +522,93 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 			"""
 			data = nifi.apply_parameter_context_to_process_group(pg_id, pg_version, context_id)
 			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def start_all_processors_in_group(pg_id: str) -> Dict[str, Any]:
+			"""Start ALL processors in a process group at once. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			This is a BULK operation that starts all processors simultaneously, much faster than starting individually.
+			
+			Returns counts of:
+			  - started: Successfully started processors
+			  - already_running: Processors that were already running
+			  - failed: Processors that failed to start (with error messages)
+			
+			Use case: "Start all processors in my ETL group"
+			"""
+			data = nifi.start_all_processors_in_group(pg_id)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def stop_all_processors_in_group(pg_id: str) -> Dict[str, Any]:
+			"""Stop ALL processors in a process group at once. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			This is a BULK operation that stops all processors simultaneously, much faster than stopping individually.
+			
+			Returns counts of:
+			  - stopped: Successfully stopped processors
+			  - already_stopped: Processors that were already stopped
+			  - failed: Processors that failed to stop (with error messages)
+			
+			Use case: "Stop all processors before making changes"
+			"""
+			data = nifi.stop_all_processors_in_group(pg_id)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def enable_all_controller_services_in_group(pg_id: str) -> Dict[str, Any]:
+			"""Enable ALL controller services in a process group at once. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			This is a BULK operation that enables all services simultaneously.
+			
+			Returns counts of:
+			  - enabled: Successfully enabled services
+			  - already_enabled: Services that were already enabled
+			  - failed: Services that failed to enable (with error messages)
+			
+			Use case: "Enable all services before starting flow"
+			"""
+			data = nifi.enable_all_controller_services_in_group(pg_id)
+			return _redact_sensitive(data)
+		
+		@app.tool()
+		async def terminate_processor(processor_id: str, version: int) -> Dict[str, Any]:
+			"""Forcefully terminate a stuck processor. **WRITE OPERATION** - Requires NIFI_READONLY=false.
+			
+			⚠️ WARNING: Last-resort operation for processors that won't stop normally!
+			
+			Use only when:
+			  - Processor is stuck and not responding
+			  - Normal stop command doesn't work
+			  - Processor threads need to be killed
+			
+			The operation first tries a normal stop, only terminates if that fails.
+			
+			Use case: "My processor is stuck and won't stop, force terminate it"
+			"""
+			data = nifi.terminate_processor(processor_id, version)
+			return _redact_sensitive(data)
+	
+	# Read-only health monitoring tool (available even in readonly mode)
+	@app.tool()
+	async def get_flow_health_status(pg_id: str) -> Dict[str, Any]:
+		"""Get comprehensive health status of a process group and all its components.
+		
+		Returns detailed health information:
+		  - Processor status (running/stopped/invalid/disabled counts)
+		  - Controller service status (enabled/disabled/invalid counts)
+		  - Connection queue status (queued data, backpressure)
+		  - Recent bulletins and errors
+		  - Overall health assessment (HEALTHY | DEGRADED | UNHEALTHY)
+		
+		Use cases:
+		  - "Is my flow healthy?"
+		  - "Show me flow status"
+		  - "What's broken in my pipeline?"
+		  - "Check for errors in my data ingestion group"
+		"""
+		data = nifi.get_flow_health_status(pg_id)
+		return _redact_sensitive(data)
 
 	return app
 

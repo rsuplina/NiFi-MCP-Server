@@ -10,7 +10,7 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
 - **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
 - **Read-only by default** - Safe exploration of NiFi flows and configuration
 - **Intelligent flow building** - Pattern recognition and requirements gathering for complex flows
-- **18 read-only MCP tools** for exploring NiFi:
+- **19 read-only MCP tools** for exploring NiFi:
   - `get_nifi_version()` - Version and build information
   - `get_root_process_group()` - Root process group details
   - `list_processors(process_group_id)` - List processors in a process group
@@ -29,7 +29,8 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `get_flow_summary(process_group_id)` - Flow statistics and health overview
   - `analyze_flow_build_request(user_request)` - Intelligent pattern recognition and requirements gathering
   - `get_parameter_context_details(context_id)` - Get parameter context with all parameters
-- **36 write operations** (when `NIFI_READONLY=false`):
+  - `get_flow_health_status(process_group_id)` - Comprehensive flow health check (processors, services, connections, errors)
+- **41 write operations** (when `NIFI_READONLY=false`):
   - `start_processor(processor_id, version)` - Start a processor
   - `stop_processor(processor_id, version)` - Stop a processor
   - `create_processor(...)` - Create a new processor
@@ -61,6 +62,10 @@ Model Context Protocol server providing read-only access to Apache NiFi via Apac
   - `start_output_port(port_id, version)` - Start output port to enable data flow
   - `stop_output_port(port_id, version)` - Stop output port
   - `apply_parameter_context_to_process_group(pg_id, pg_version, context_id)` - Apply parameter context to enable #{param} usage
+  - `start_all_processors_in_group(pg_id)` - Bulk start all processors at once (10-15x faster!)
+  - `stop_all_processors_in_group(pg_id)` - Bulk stop all processors at once  
+  - `enable_all_controller_services_in_group(pg_id)` - Bulk enable all services at once
+  - `terminate_processor(processor_id, version)` - Force-terminate stuck processor (last resort)
 
 ## Quick Start
 
