@@ -12,7 +12,7 @@ Model Context Protocol server providing selectable read and write access to Apac
 - **Knox authentication** - Supports Bearer tokens, cookies, and passcode tokens for CDP deployments
 - **Read-only by default** - Safe exploration of NiFi flows and configuration
 - **Intelligent flow building** - Pattern recognition and requirements gathering for complex flows
-- **19 read-only MCP tools** for exploring NiFi:
+- **24 read-only MCP tools** for exploring NiFi:
   - `get_nifi_version()` - Version and build information
   - `get_root_process_group()` - Root process group details
   - `list_processors(process_group_id)` - List processors in a process group
@@ -32,7 +32,12 @@ Model Context Protocol server providing selectable read and write access to Apac
   - `analyze_flow_build_request(user_request)` - Intelligent pattern recognition and requirements gathering
   - `get_parameter_context_details(context_id)` - Get parameter context with all parameters
   - `get_flow_health_status(process_group_id)` - Comprehensive flow health check (processors, services, connections, errors)
-- **41 write operations** (when `NIFI_READONLY=false`):
+  - `find_controller_services_by_type(process_group_id, service_type)` - Search for existing controller services by type (prevents 409 conflicts)
+  - `check_configuration()` - Validate current environment configuration
+  - `get_setup_instructions()` - Interactive setup guidance for NiFi MCP Server
+  - `get_best_practices_guide()` - Best practices for building NiFi flows
+  - `get_recommended_workflow(flow_type)` - Step-by-step guidance for common flow patterns
+- **42 write operations** (when `NIFI_READONLY=false`):
   - `start_processor(processor_id, version)` - Start a processor
   - `stop_processor(processor_id, version)` - Stop a processor
   - `create_processor(...)` - Create a new processor
@@ -68,6 +73,7 @@ Model Context Protocol server providing selectable read and write access to Apac
   - `stop_all_processors_in_group(pg_id)` - Bulk stop all processors at once  
   - `enable_all_controller_services_in_group(pg_id)` - Bulk enable all services at once
   - `terminate_processor(processor_id, version)` - Force-terminate stuck processor (last resort)
+  - `start_new_flow(flow_name, flow_description)` - Smart flow builder that automatically creates process groups and enforces best practices
 
 ## Quick Start
 
