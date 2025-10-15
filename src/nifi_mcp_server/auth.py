@@ -33,7 +33,7 @@ class KnoxAuthFactory:
 		session = requests.Session()
 		session.verify = self.verify
 
-		# Priority: Explicit Cookie -> Knox token (as cookie for CDP) -> Passcode token -> Basic creds token exchange
+		# Priority: Explicit Cookie -> Knox token (as cookie for CDP) -> Passcode token -> Basic creds token exchange -> Direct Basic Auth
 		if self.cookie:
 			session.headers["Cookie"] = self.cookie
 			return session
@@ -54,9 +54,19 @@ class KnoxAuthFactory:
 			session.headers["X-Knox-Passcode"] = self.passcode_token
 			return session
 
-		if self.user and self.password and self.token_endpoint:
-			jwt = self._fetch_knox_token()
-			session.headers["Authorization"] = f"Bearer {jwt}"
+		if self.user and self.password:
+			# Try token exchange if endpoint is available
+			if self.token_endpoint:
+				try:
+					jwt = self._fetch_knox_token()
+					session.headers["Authorization"] = f"Bearer {jwt}"
+					return session
+				except Exception:
+					# If token exchange fails, fall back to direct basic auth
+					pass
+			
+			# Direct Basic Authentication (fallback or when no token endpoint)
+			session.auth = (self.user, self.password)
 			return session
 
 		return session
