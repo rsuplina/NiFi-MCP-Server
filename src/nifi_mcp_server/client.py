@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple, List
 from functools import lru_cache
+import time
+import logging
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+logger = logging.getLogger(__name__)
 
 
 class NiFiError(Exception):
@@ -37,6 +41,57 @@ class NiFiClient:
 
 	def _url(self, path: str) -> str:
 		return f"{self.base_url}/{path.lstrip('/')}"
+
+	def test_connection(self) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+		"""
+		Test connection to NiFi and validate authentication.
+		
+		Returns:
+			Tuple of (success: bool, message: str, version_info: Optional[Dict])
+			
+		Raises:
+			RuntimeError: If connection fails with detailed error message
+		"""
+		logger.info("🧪 Testing NiFi connection...")
+		
+		try:
+			start = time.time()
+			test_resp = self.session.get(
+				f"{self.base_url}/flow/about", 
+				timeout=10, 
+				verify=self.session.verify
+			)
+			elapsed = time.time() - start
+			
+			if test_resp.status_code == 401:
+				error_msg = f"❌ NiFi connection FAILED: Authentication error (401) - Check KNOX_USER/KNOX_PASSWORD/KNOX_TOKEN (took {elapsed:.2f}s)"
+				logger.error(error_msg)
+				raise RuntimeError("Authentication failed - invalid credentials")
+				
+			elif test_resp.status_code == 403:
+				error_msg = f"❌ NiFi connection FAILED: Access forbidden (403) - Credentials valid but insufficient permissions (took {elapsed:.2f}s)"
+				logger.error(error_msg)
+				raise RuntimeError("Access forbidden - insufficient permissions")
+				
+			elif test_resp.status_code != 200:
+				error_msg = f"❌ NiFi connection FAILED: HTTP {test_resp.status_code} (took {elapsed:.2f}s) - Response: {test_resp.text[:200]}"
+				logger.error(error_msg)
+				raise RuntimeError(f"NiFi API returned HTTP {test_resp.status_code}")
+				
+			else:
+				about = test_resp.json()
+				version = about.get("about", {}).get("version", "unknown")
+				success_msg = f"✅ NiFi connection successful! Connected to NiFi {version} (took {elapsed:.2f}s)"
+				logger.info(success_msg)
+				return True, success_msg, about
+				
+		except RuntimeError:
+			# Re-raise authentication/permission errors
+			raise
+		except Exception as e:
+			error_msg = f"❌ NiFi connection FAILED: {e} - Check NIFI_API_BASE and network connectivity"
+			logger.error(error_msg)
+			raise RuntimeError(f"Failed to connect to NiFi: {e}")
 
 	@retry(
 		retry=retry_if_exception_type((NiFiError, requests.HTTPError, requests.ConnectionError, requests.Timeout)),

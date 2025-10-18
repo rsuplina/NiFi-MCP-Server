@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 
 import anyio
 
+import sys
+import logging
 from .config import ServerConfig
 from .auth import KnoxAuthFactory
 from .client import NiFiClient
@@ -14,6 +16,12 @@ from .best_practices import NiFiBestPractices, SmartFlowBuilder
 from .setup_helper import SetupGuide
 
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stderr,
+)
+logger = logging.getLogger(__name__)
 # Lazy import of MCP to give a clear error if the dependency is missing
 try:
 	from mcp.server import FastMCP
@@ -740,13 +748,30 @@ def create_server(nifi: NiFiClient, readonly: bool) -> FastMCP:
 
 
 async def run_stdio() -> None:
-	# For FastMCP, prefer the built-in stdio runner
-	config = ServerConfig()
-	nifi = build_client(config)
-	server = create_server(nifi, readonly=config.readonly)
-	# run() is synchronous; call the async flavor directly
-	await server.run_stdio_async()
+    logger.info("Starting NiFi MCP Server initialization...")
+    logger.info(f"Process ID: {os.getpid()}")
+    logger.info(f"Python: {sys.executable}")
+    logger.info(f"Working directory: {os.getcwd()}")
 
+    try:
+        config = ServerConfig()
+        nifi = build_client(config)
+
+        nifi.test_connection()
+
+        logger.info("Creating MCP server...")
+        server = create_server(nifi, readonly=config.readonly)
+
+        logger.info("=" * 60)
+        logger.info("MCP Server ready and waiting for requests...")
+        logger.info(f"Readonly mode: {config.readonly}")
+        logger.info("=" * 60)
+
+        await server.run_stdio_async()
+
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}", exc_info=True)
+        raise
 
 def main() -> None:
 	transport = os.getenv("MCP_TRANSPORT", "stdio").lower()
@@ -762,5 +787,4 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
-
 
