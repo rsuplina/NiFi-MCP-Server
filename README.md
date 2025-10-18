@@ -147,6 +147,58 @@ For use with Cloudera Agent Studio, use the `uvx` command:
 }
 ```
 
+### Option 3: VS Code Copilot Integration (Local)
+
+
+1. **Clone and install:**
+   ```bash
+   git clone https://github.com/kevinbtalbert/nifi-mcp-server.git
+   cd nifi-mcp-server
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+
+2. **Configure the MCP server** - Create  `.vscode/mcp.json` in your workspace:
+
+   ```json
+   {
+     "servers": {
+       "nifi-mcp-server": {
+         "type": "stdio",
+         "command": "/Users/your-username/.virtualenvs/mcp-test/bin/python",
+         "args": [
+           "-m",
+           "nifi_mcp_server.server"
+         ],
+         "env": {
+           "MCP_TRANSPORT": "stdio",
+           "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.  cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
+           "KNOX_TOKEN": "<your_knox_bearer_token>",
+           "NIFI_READONLY": "true"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Reload VS Code** to apply the new MCP server configuration.
+
+4. **Start the MCP server** by clicking on Extensions button and then start the `nifi-mcp-server` :
+
+![](/screenshots/vs-code-2-start-mcp-server.png)
+
+5. **Verify connection** by clicking Tools icon inside Copilot :
+
+![](/screenshots/vs-code-3-agent-tools-button.png)
+![](/screenshots/vs-code-4-confirm-connection.png)
+
+Let's verify the connection by running a simple prompt example:
+
+![](/screenshots/vs-code-5-list-processors.png)
+![](/screenshots/vs-code-6-nifi-example.png)
+
+
 ## Configuration Options
 
 All configuration is done via environment variables:
