@@ -173,7 +173,7 @@ For use with Cloudera Agent Studio, use the `uvx` command:
          ],
          "env": {
            "MCP_TRANSPORT": "stdio",
-           "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.  cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
+           "NIFI_API_BASE": "https://nifi-2-dh-management0.yourshere.cloudera.site/nifi-2-dh/cdp-proxy/nifi-app/nifi-api",
            "KNOX_TOKEN": "<your_knox_bearer_token>",
            "NIFI_READONLY": "true"
          }
@@ -188,12 +188,12 @@ For use with Cloudera Agent Studio, use the `uvx` command:
 
 ![](/screenshots/vs-code-2-start-mcp-server.png)
 
-5. **Verify connection** by clicking Tools icon inside Copilot :
+5. **Check MCP server status and available tools** by clicking the Tools icon inside Copilot:
 
 ![](/screenshots/vs-code-3-agent-tools-button.png)
 ![](/screenshots/vs-code-4-confirm-connection.png)
 
-Let's verify the connection by running a simple prompt example:
+6. **Test MCP server functionality** by entering a prompt such as “List me current processors in the flow” in Copilot.  
 
 ![](/screenshots/vs-code-5-list-processors.png)
 ![](/screenshots/vs-code-6-nifi-example.png)
